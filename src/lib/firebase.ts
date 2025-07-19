@@ -15,7 +15,7 @@ const firebaseConfig = {
 };
 
 // Check if the firebase config has been filled out
-export const isFirebaseConfigured = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== 'REPLACE_WITH_YOUR_API_KEY';
+export const isFirebaseConfigured = !!firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('REPLACE_WITH_YOUR');
 
 let app: FirebaseApp;
 let db: Firestore;
