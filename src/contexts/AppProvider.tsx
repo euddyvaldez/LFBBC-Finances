@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import type { FinancialRecord, Integrante, Razon } from '@/types';
 import * as api from '@/lib/data';
-import { onSnapshot, collection, query, where } from 'firebase/firestore';
+import { onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import { useAuth } from './AuthProvider';
 import { parse, isValid, startOfDay } from 'date-fns';
@@ -33,8 +33,10 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const parseDate = (dateStr: string) => parse(dateStr, 'dd/MM/yyyy', new Date());
 
+// Since auth is removed, we use a default user ID for all operations.
+const DEFAULT_USER_ID = 'default-user';
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
   const [integrantes, setIntegrantes] = useState<Integrante[]>([]);
   const [razones, setRazones] = useState<Razon[]>([]);
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
@@ -42,17 +44,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!user || !isFirebaseConfigured) {
+    if (!isFirebaseConfigured) {
       setIntegrantes([]);
       setRazones([]);
       setFinancialRecords([]);
-      setLoading(false); // Asegurarse de que el estado de carga termine si no hay usuario.
+      setLoading(false);
+      console.error("Firebase is not configured. Data operations will not work.");
       return;
     };
 
     setLoading(true);
 
-    const createQuery = (collectionName: string) => query(collection(db, collectionName), where("userId", "==", user.uid));
+    const createQuery = (collectionName: string) => query(collection(db, collectionName), where("userId", "==", DEFAULT_USER_ID));
 
     const unsubscribers = [
       onSnapshot(createQuery('integrantes'), (snapshot) => {
@@ -80,10 +83,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       })
     ];
 
+    // Seed initial data if it doesn't exist for the default user
+    const seedData = async () => {
+        const q = query(collection(db, 'razones'), where("userId", "==", DEFAULT_USER_ID));
+        const snapshot = await getDocs(q);
+        if (snapshot.empty) {
+            console.log("No data found for default user, seeding initial data...");
+            await Promise.all([
+              api.addIntegrante("INVITADO", true, DEFAULT_USER_ID),
+              api.addRazon("MENSUALIDAD", true, true, DEFAULT_USER_ID),
+              api.addRazon("SEMANAL", true, true, DEFAULT_USER_ID)
+            ]);
+        }
+    };
+    seedData();
+
+
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [user]);
+  }, []);
 
   const recordDates = useMemo(() => {
     const dates = new Set<number>();
@@ -98,29 +117,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return dates;
   }, [financialRecords]);
 
-  const addFinancialRecordWithUserId = (record: Omit<FinancialRecord, 'id' | 'userId'>) => {
-    if (!user) throw new Error("Usuario no autenticado");
-    return api.addFinancialRecord(record, user.uid);
+  const addFinancialRecordDefaultUser = (record: Omit<FinancialRecord, 'id' | 'userId'>) => {
+    return api.addFinancialRecord(record, DEFAULT_USER_ID);
   }
-  const importFinancialRecordsWithUserId = (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-    if (!user) throw new Error("Usuario no autenticado");
-    return api.importFinancialRecords(records, mode, user.uid);
+  const importFinancialRecordsDefaultUser = (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+    return api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
   };
-  const addIntegranteWithUserId = (nombre: string, isProtected?: boolean) => {
-     if (!user) throw new Error("Usuario no autenticado");
-     return api.addIntegrante(nombre, isProtected, user.uid);
+  const addIntegranteDefaultUser = (nombre: string, isProtected?: boolean) => {
+     return api.addIntegrante(nombre, isProtected, DEFAULT_USER_ID);
   }
-   const importIntegrantesWithUserId = (integrantes: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-    if (!user) throw new Error("Usuario no autenticado");
-    return api.importIntegrantes(integrantes, mode, user.uid);
+   const importIntegrantesDefaultUser = (integrantes: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+    return api.importIntegrantes(integrantes, mode, DEFAULT_USER_ID);
   };
-   const addRazonWithUserId = (descripcion: string, isQuickReason?: boolean, isProtected?: boolean) => {
-    if (!user) throw new Error("Usuario no autenticado");
-    return api.addRazon(descripcion, isQuickReason, isProtected, user.uid);
+   const addRazonDefaultUser = (descripcion: string, isQuickReason?: boolean, isProtected?: boolean) => {
+    return api.addRazon(descripcion, isQuickReason, isProtected, DEFAULT_USER_ID);
   }
-  const importRazonesWithUserId = (razones: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-    if (!user) throw new Error("Usuario no autenticado");
-    return api.importRazones(razones, mode, user.uid);
+  const importRazonesDefaultUser = (razones: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+    return api.importRazones(razones, mode, DEFAULT_USER_ID);
   };
 
 
@@ -131,16 +144,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     recordDates,
     loading,
     error,
-    addFinancialRecord: addFinancialRecordWithUserId,
+    addFinancialRecord: addFinancialRecordDefaultUser,
     updateFinancialRecord: api.updateFinancialRecord,
     deleteFinancialRecord: api.deleteFinancialRecord,
-    importFinancialRecords: importFinancialRecordsWithUserId,
-    addIntegrante: addIntegranteWithUserId,
-    importIntegrantes: importIntegrantesWithUserId,
+    importFinancialRecords: importFinancialRecordsDefaultUser,
+    addIntegrante: addIntegranteDefaultUser,
+    importIntegrantes: importIntegrantesDefaultUser,
     updateIntegrante: api.updateIntegrante,
     deleteIntegrante: api.deleteIntegrante,
-    addRazon: addRazonWithUserId,
-    importRazones: importRazonesWithUserId,
+    addRazon: addRazonDefaultUser,
+    importRazones: importRazonesDefaultUser,
     updateRazon: api.updateRazon,
     deleteRazon: api.deleteRazon,
   };

@@ -4,13 +4,11 @@
 import { useTheme } from '@/components/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
-import { LogOut, Menu, Moon, Sun } from 'lucide-react';
+import { Menu, Moon, Sun } from 'lucide-react';
 import { DesktopSidebar } from './DesktopSidebar';
-import { useAuth } from '@/contexts/AuthProvider';
 
 export function Header() {
   const { theme, toggleTheme } = useTheme();
-  const { logout, user } = useAuth();
 
   return (
     <header className="sticky top-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-lg border-b">
@@ -41,14 +39,10 @@ export function Header() {
             <h1 className="text-lg font-semibold text-center">
             Registros Financieros
             </h1>
-            {user && <span className="text-xs text-muted-foreground">{user.email}</span>}
         </div>
         <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
             {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </Button>
-            <Button variant="ghost" size="icon" onClick={logout} aria-label="Cerrar sesión">
-                <LogOut className="h-5 w-5" />
             </Button>
         </div>
       </div>

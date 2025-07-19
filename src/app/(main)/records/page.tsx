@@ -144,7 +144,7 @@ const RecordsForm = ({ record, onFinished }: { record?: FinancialRecord, onFinis
                                 mode="single" 
                                 selected={field.value} 
                                 onSelect={field.onChange}
-                                disabled={(date) => date > new Date() || date < new Date('1900-01-01') || disabledDates(date)}
+                                disabled={(date) => date > new Date() || date < new Date('1900-01-01')}
                                 initialFocus />
                         </PopoverContent>
                         </Popover><FormMessage />
@@ -610,9 +610,9 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
 
 export default function RecordsPage() {
     const { financialRecords, loading } = useAppContext();
-    const { user, loading: authLoading } = useAuth();
+    const { loading: authLoading } = useAuth();
 
-    if (loading || authLoading || !user) {
+    if (loading || authLoading) {
         return (
           <div className="flex justify-center items-center h-[calc(100vh-10rem)]">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
