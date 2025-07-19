@@ -35,6 +35,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const dummyUser = { uid: 'demo-user' } as User;
+    setUser(dummyUser);
+    setLoading(false);
+    
+    // The original onAuthStateChanged logic is commented out to allow demo access
+    /*
     const unsubscribe = onAuthStateChanged(auth, 
       (user) => { // onNext observer
         setUser(user);
@@ -53,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => unsubscribe();
+    */
   }, [pathname, router]);
 
   const login = async (email: string, password: string) => {
@@ -95,6 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    router.push('/login');
+    // Original logout logic commented out
+    /*
     if (!isFirebaseConfigured) {
       handleAuthError({ code: 'auth/invalid-api-key' });
       return;
@@ -106,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e: any) {
         handleAuthError(e);
     }
+    */
   };
 
   const handleAuthError = (e: any) => {

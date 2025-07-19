@@ -26,6 +26,7 @@ import {
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 const loginSchema = z.object({
   email: z.string().email('Email no válido.'),
@@ -35,24 +36,20 @@ const loginSchema = z.object({
 export default function LoginPage() {
   const { login, error } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: '',
-      password: '',
+      email: 'demo@example.com',
+      password: 'password',
     },
   });
 
-  const onSubmit = async (values: z.infer<typeof loginSchema>) => {
+  const onSubmit = () => {
     setIsSubmitting(true);
-    try {
-      await login(values.email, values.password);
-    } catch (e) {
-      // Error is handled in AuthProvider, just need to stop submitting
-    } finally {
-      setIsSubmitting(false);
-    }
+    // Bypass authentication and redirect to home
+    router.push('/');
   };
 
   return (
@@ -102,6 +99,9 @@ export default function LoginPage() {
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Iniciar Sesión
               </Button>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                Acceso de demostración: no se requiere autenticación.
+              </p>
             </form>
           </Form>
         </CardContent>
