@@ -31,9 +31,13 @@ export const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'i
   const integrantesCol = collection(db, 'integrantes');
   
   if (mode === 'replace') {
-    const q = query(integrantesCol, where('isProtected', '!=', true), where("userId", "==", userId));
+    const q = query(integrantesCol, where("userId", "==", userId));
     const snapshot = await getDocs(q);
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    snapshot.docs.forEach(doc => {
+      if (!doc.data().isProtected) {
+        batch.delete(doc.ref);
+      }
+    });
   }
   
   integrantesToImport.forEach(integrante => {
@@ -80,9 +84,13 @@ export const importRazones = async (razonesToImport: Omit<Razon, 'id' | 'userId'
     const razonesCol = collection(db, 'razones');
     
     if (mode === 'replace') {
-        const q = query(razonesCol, where("isProtected", "!=", true), where("userId", "==", userId));
+        const q = query(razonesCol, where("userId", "==", userId));
         const snapshot = await getDocs(q);
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        snapshot.docs.forEach(doc => {
+          if (!doc.data().isProtected) {
+            batch.delete(doc.ref);
+          }
+        });
     }
 
     razonesToImport.forEach(razon => {
