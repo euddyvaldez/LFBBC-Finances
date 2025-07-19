@@ -21,12 +21,15 @@ interface AppContextType {
   updateFinancialRecord: (id: string, record: Partial<Omit<FinancialRecord, 'id' | 'userId'>>) => Promise<void>;
   deleteFinancialRecord: (id: string) => Promise<void>;
   importFinancialRecords: (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
+  importFinancialRecordsLocal: (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
   addIntegrante: (nombre: string, isProtected?: boolean) => Promise<void>;
   importIntegrantes: (integrantes: Omit<Integrante, 'id'| 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
+  importIntegrantesLocal: (integrantes: Omit<Integrante, 'id'| 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
   updateIntegrante: (id: string, nombre: string) => Promise<void>;
   deleteIntegrante: (id: string) => Promise<void>;
   addRazon: (descripcion: string, isQuickReason?: boolean, isProtected?: boolean) => Promise<void>;
   importRazones: (razones: Omit<Razon, 'id'| 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
+  importRazonesLocal: (razones: Omit<Razon, 'id'| 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
   updateRazon: (id: string, updates: Partial<Omit<Razon, 'id' | 'userId'>>) => Promise<void>;
   deleteRazon: (id: string) => Promise<void>;
 }
@@ -54,7 +57,12 @@ const DEFAULT_USER_ID = 'default-user';
 const getFromLocalStorage = <T>(key: string, defaultValue: T): T => {
     if (typeof window === 'undefined') return defaultValue;
     const storedValue = window.localStorage.getItem(key);
-    return storedValue ? JSON.parse(storedValue) : defaultValue;
+    try {
+        return storedValue ? JSON.parse(storedValue) : defaultValue;
+    } catch (error) {
+        console.error(`Error parsing localStorage key "${key}":`, error);
+        return defaultValue;
+    }
 };
 
 const setToLocalStorage = <T>(key: string, value: T) => {
@@ -65,41 +73,43 @@ const setToLocalStorage = <T>(key: string, value: T) => {
 
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [integrantes, setIntegrantes] = useState<Integrante[]>([]);
-  const [razones, setRazones] = useState<Razon[]>([]);
-  const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
+  const [integrantes, setIntegrantes] = useState<Integrante[]>(() => getFromLocalStorage('integrantes', []));
+  const [razones, setRazones] = useState<Razon[]>(() => getFromLocalStorage('razones', []));
+  const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>(() => getFromLocalStorage('financialRecords', []));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  
+  const [pendingOps, setPendingOps] = useState<PendingOperation[]>(() => getFromLocalStorage('pendingOps', []));
 
-  const [pendingOps, setPendingOps] = useState<PendingOperation[]>(getFromLocalStorage('pendingOps', []));
+  useEffect(() => setToLocalStorage('integrantes', integrantes), [integrantes]);
+  useEffect(() => setToLocalStorage('razones', razones), [razones]);
+  useEffect(() => setToLocalStorage('financialRecords', financialRecords), [financialRecords]);
+  useEffect(() => setToLocalStorage('pendingOps', pendingOps), [pendingOps]);
 
-  useEffect(() => {
-    setToLocalStorage('pendingOps', pendingOps);
-  }, [pendingOps]);
 
   const addPendingOp = (op: PendingOperation) => {
       setPendingOps(prev => [...prev, op]);
   }
 
   useEffect(() => {
-    setLoading(true);
-
     if (!isFirebaseConfigured) {
         console.warn("Firebase is not configured. Running in offline mode.");
-        setIntegrantes(getFromLocalStorage('integrantes', []));
-        setRazones(getFromLocalStorage('razones', []));
-        setFinancialRecords(getFromLocalStorage('financialRecords', []));
         setLoading(false);
         return;
     }
 
-    // --- Firebase is configured, run online logic ---
+    setLoading(true);
+
     const syncPendingOperations = async () => {
         if (pendingOps.length === 0) return;
         console.log(`Syncing ${pendingOps.length} pending operations...`);
         
         let success = true;
-        for (const op of pendingOps) {
+        const remainingOps = [...pendingOps];
+        
+        while(remainingOps.length > 0) {
+            const op = remainingOps.shift();
+            if(!op) continue;
             try {
                 switch(op.type) {
                     case 'addFinancialRecord': await api.addFinancialRecord(op.payload, DEFAULT_USER_ID); break;
@@ -112,17 +122,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     case 'updateRazon': await api.updateRazon(op.payload.id, op.payload.updates); break;
                     case 'deleteRazon': await api.deleteRazon(op.payload.id); break;
                 }
+                 setPendingOps(currentOps => currentOps.filter(p => p !== op));
             } catch(e) {
-                console.error("Failed to sync operation:", op, e);
+                console.error("Failed to sync operation, will retry later:", op, e);
                 success = false;
-                // If one op fails, stop syncing to maintain order
                 break;
             }
         }
 
         if (success) {
             console.log("All pending operations synced successfully.");
-            setPendingOps([]); // Clear the queue
         }
     };
 
@@ -134,19 +143,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onSnapshot(createQuery('integrantes'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Integrante));
         setIntegrantes(data);
-        setToLocalStorage('integrantes', data);
       }, (err) => { setError(err); console.error("Error fetching integrantes:", err); }),
       
       onSnapshot(createQuery('razones'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Razon));
         setRazones(data);
-        setToLocalStorage('razones', data);
       }, (err) => { setError(err); console.error("Error fetching razones:", err); }),
       
       onSnapshot(createQuery('financialRecords'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinancialRecord));
         setFinancialRecords(data);
-        setToLocalStorage('financialRecords', data);
         setLoading(false);
       }, (err) => { setError(err); setLoading(false); console.error("Error fetching financial records:", err); })
     ];
@@ -166,7 +172,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     seedData();
 
     return () => unsubscribers.forEach(unsub => unsub());
-  }, [isFirebaseConfigured]);
+  }, []);
 
   const recordDates = useMemo(() => {
     const dates = new Set<number>();
@@ -184,17 +190,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // --- Wrapped API Functions for Offline Support ---
 
   const addFinancialRecord = async (record: Omit<FinancialRecord, 'id' | 'userId'>) => {
-    if (isFirebaseConfigured) {
-      return api.addFinancialRecord(record, DEFAULT_USER_ID);
-    }
-    const newRecord: FinancialRecord = { ...record, id: uuidv4(), userId: DEFAULT_USER_ID };
-    let monto = newRecord.monto;
-    if ((newRecord.movimiento === 'GASTOS' || newRecord.movimiento === 'INVERSION') && monto > 0) monto = -monto;
-    if (newRecord.movimiento === 'INGRESOS' && monto < 0) monto = Math.abs(monto);
-    newRecord.monto = monto;
+    let monto = record.monto;
+    if ((record.movimiento === 'GASTOS' || record.movimiento === 'INVERSION') && monto > 0) monto = -monto;
+    if (record.movimiento === 'INGRESOS' && monto < 0) monto = Math.abs(monto);
+    const finalRecord = { ...record, monto };
 
+    if (isFirebaseConfigured) {
+      return api.addFinancialRecord(finalRecord, DEFAULT_USER_ID);
+    }
+    const newRecord: FinancialRecord = { ...finalRecord, id: uuidv4(), userId: DEFAULT_USER_ID };
     setFinancialRecords(prev => [...prev, newRecord]);
-    addPendingOp({ type: 'addFinancialRecord', payload: record });
+    addPendingOp({ type: 'addFinancialRecord', payload: finalRecord });
   };
   
   const updateFinancialRecord = async (id: string, updates: Partial<Omit<FinancialRecord, 'id' | 'userId'>>) => {
@@ -264,24 +270,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const importFinancialRecords = async (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-      if(isFirebaseConfigured) {
-        return api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
+      if(!isFirebaseConfigured) throw new Error("Firebase not configured for cloud import.");
+      return api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
+  };
+  
+  const importFinancialRecordsLocal = async (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      let finalRecords = [...financialRecords];
+      if (mode === 'replace') {
+          finalRecords = [];
       }
-      console.warn("Import is disabled in offline mode.");
+      
+      const recordsWithIds = records.map(r => ({ ...r, id: uuidv4(), userId: DEFAULT_USER_ID }));
+
+      if (mode === 'add') {
+          finalRecords.push(...recordsWithIds);
+      } else {
+          finalRecords = recordsWithIds;
+      }
+      setFinancialRecords(finalRecords);
   };
 
-  const importIntegrantes = async (integrantes: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-      if(isFirebaseConfigured) {
-        return api.importIntegrantes(integrantes, mode, DEFAULT_USER_ID);
-      }
-      console.warn("Import is disabled in offline mode.");
+  const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      if(!isFirebaseConfigured) throw new Error("Firebase not configured for cloud import.");
+      return api.importIntegrantes(integrantesToImport, mode, DEFAULT_USER_ID);
   };
 
-  const importRazones = async (razones: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-      if(isFirebaseConfigured) {
-        return api.importRazones(razones, mode, DEFAULT_USER_ID);
+  const importIntegrantesLocal = async (integrantesToImport: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      let finalIntegrantes = [...integrantes];
+      if (mode === 'replace') {
+          finalIntegrantes = finalIntegrantes.filter(i => i.isProtected);
       }
-      console.warn("Import is disabled in offline mode.");
+
+      const newIntegrantes = integrantesToImport.map(i => ({...i, nombre: i.nombre.toUpperCase(), id: uuidv4(), userId: DEFAULT_USER_ID }));
+      
+      if (mode === 'add') {
+          finalIntegrantes.push(...newIntegrantes);
+      } else {
+          finalIntegrantes.push(...newIntegrantes);
+      }
+      setIntegrantes(finalIntegrantes);
+  };
+
+  const importRazones = async (razonesToImport: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      if(!isFirebaseConfigured) throw new Error("Firebase not configured for cloud import.");
+      return api.importRazones(razonesToImport, mode, DEFAULT_USER_ID);
+  };
+
+  const importRazonesLocal = async (razonesToImport: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      let finalRazones = [...razones];
+      if (mode === 'replace') {
+          finalRazones = finalRazones.filter(r => r.isProtected);
+      }
+
+      const newRazones = razonesToImport.map(r => ({...r, descripcion: r.descripcion.toUpperCase(), id: uuidv4(), userId: DEFAULT_USER_ID}));
+      
+      if (mode === 'add') {
+          finalRazones.push(...newRazones);
+      } else {
+          finalRazones.push(...newRazones);
+      }
+      setRazones(finalRazones);
   };
 
   const value: AppContextType = {
@@ -295,14 +343,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     updateFinancialRecord,
     deleteFinancialRecord,
     importFinancialRecords,
+    importFinancialRecordsLocal,
     addIntegrante,
     updateIntegrante,
     deleteIntegrante,
     importIntegrantes,
+    importIntegrantesLocal,
     addRazon,
     updateRazon,
     deleteRazon,
     importRazones,
+    importRazonesLocal,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

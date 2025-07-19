@@ -10,7 +10,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, parse, isValid, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Download, Loader2, Upload, Tag, User, Calendar as CalendarIcon, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, Loader2, Upload, Tag, User, Calendar as CalendarIcon, Pencil, Trash2, ChevronLeft, ChevronRight, Cloud, HardDrive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -21,8 +21,11 @@ import { Calendar } from '@/components/ui/calendar';
 import type { FinancialRecord, Movimiento } from '@/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Autocomplete } from '@/components/Autocomplete';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthProvider';
+import { Label } from '@/components/ui/label';
+import { isFirebaseConfigured } from '@/lib/firebase';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const DESCRIPTION_MAX_LENGTH = 500;
 
@@ -321,12 +324,17 @@ const parseCsvLine = (line: string): string[] => {
 
 
 const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
-  const { integrantes, razones, importFinancialRecords } = useAppContext();
+  const { integrantes, razones, importFinancialRecords, importFinancialRecordsLocal } = useAppContext();
   const { toast } = useToast();
   const [filter, setFilter] = useState('');
   const [filterField, setFilterField] = useState('descripcion');
+
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importDestination, setImportDestination] = useState<'local' | 'cloud'>(isFirebaseConfigured ? 'cloud' : 'local');
+  const [importMode, setImportMode] = useState<'add' | 'replace'>('add');
   const importFileInputRef = useRef<HTMLInputElement>(null);
-  const [importDialog, setImportDialog] = useState<{isOpen: boolean, file: File | null}>({isOpen: false, file: null});
+
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage, setRecordsPerPage] = useState(20);
 
@@ -387,20 +395,18 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
     toast({ title: 'Éxito', description: 'Registros exportados a CSV.' });
   };
   
-  const handleImportClick = () => {
-    importFileInputRef.current?.click();
-  };
-
   const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      setImportDialog({ isOpen: true, file: file });
+      setImportFile(file);
     }
   };
 
-  const processImport = (mode: 'add' | 'replace') => {
-    const file = importDialog.file;
-    if (!file) return;
+  const processImport = () => {
+    if (!importFile) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Por favor, selecciona un archivo.' });
+        return;
+    }
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -462,8 +468,12 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
             }
 
             if (recordsToImport.length > 0) {
-                await importFinancialRecords(recordsToImport, mode);
-                toast({ title: 'Éxito', description: `${recordsToImport.length} registros importados en modo "${mode}".` });
+                if (importDestination === 'cloud') {
+                    await importFinancialRecords(recordsToImport, importMode);
+                } else {
+                    await importFinancialRecordsLocal(recordsToImport, importMode);
+                }
+                toast({ title: 'Éxito', description: `${recordsToImport.length} registros importados en modo "${importMode}".` });
             } else {
                 toast({ title: 'Información', description: 'No se encontraron nuevos registros para importar.' });
             }
@@ -472,11 +482,12 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
             const message = error instanceof Error ? error.message : 'Un error desconocido ocurrió.';
             toast({ variant: 'destructive', title: 'Error de importación', description: `No se pudo procesar el archivo CSV. ${message}`, duration: 8000 });
         } finally {
+            setImportFile(null);
             if (importFileInputRef.current) importFileInputRef.current.value = '';
-            setImportDialog({ isOpen: false, file: null });
+            setIsImportDialogOpen(false);
         }
     };
-    reader.readAsText(file);
+    reader.readAsText(importFile);
   };
   
   const PaginationControls = () => (
@@ -519,8 +530,64 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
             </Select>
             <Input placeholder="Buscar..." value={filter} onChange={(e) => setFilter(e.target.value)} className="flex-1"/>
             <div className="flex flex-col sm:flex-row gap-2">
-              <Button onClick={handleImportClick} variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
-              <input type="file" ref={importFileInputRef} onChange={handleFileSelected} className="hidden" accept=".csv"/>
+              <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Importar Registros desde CSV</DialogTitle>
+                        <DialogDescription>
+                            Selecciona el archivo, el destino y el modo de importación.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="grid w-full max-w-sm items-center gap-1.5">
+                            <Label htmlFor="csv-file">Archivo CSV</Label>
+                            <Input id="csv-file" type="file" accept=".csv" onChange={handleFileSelected} ref={importFileInputRef} />
+                            {importFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {importFile.name}</p>}
+                        </div>
+
+                        <div>
+                            <Label>Destino de Importación</Label>
+                            <RadioGroup value={importDestination} onValueChange={(v) => setImportDestination(v as 'local' | 'cloud')} className="mt-2 grid grid-cols-2 gap-4">
+                                <div>
+                                    <RadioGroupItem value="local" id="local" className="peer sr-only" />
+                                    <Label htmlFor="local" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                        <HardDrive className="mb-3 h-6 w-6" />
+                                        Local
+                                    </Label>
+                                </div>
+                                <div>
+                                    <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
+                                    <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                                        <Cloud className="mb-3 h-6 w-6" />
+                                        Nube
+                                    </Label>
+                                </div>
+                            </RadioGroup>
+                             {!isFirebaseConfigured && <p className="text-xs text-destructive mt-2">La importación a la nube está deshabilitada porque Firebase no está configurado.</p>}
+                        </div>
+
+                        <div>
+                           <Label>Modo de Importación</Label>
+                           <Select value={importMode} onValueChange={(v) => setImportMode(v as 'add' | 'replace')}>
+                               <SelectTrigger className="mt-2">
+                                   <SelectValue />
+                               </SelectTrigger>
+                               <SelectContent>
+                                   <SelectItem value="add">Agregar a existentes</SelectItem>
+                                   <SelectItem value="replace">Reemplazar existentes</SelectItem>
+                               </SelectContent>
+                           </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Cancelar</Button>
+                        <Button onClick={processImport} disabled={!importFile}>Importar</Button>
+                    </DialogFooter>
+                </DialogContent>
+              </Dialog>
               <Button onClick={exportToCSV} variant="outline" className="w-full"><Download className="mr-2 h-4 w-4"/>Exportar CSV</Button>
             </div>
           </div>
@@ -588,21 +655,6 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
              <PaginationControls />
         </CardContent>
       </Card>
-      <AlertDialog open={importDialog.isOpen} onOpenChange={(isOpen) => setImportDialog({isOpen, file: isOpen ? importDialog.file : null})}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Importar Registros</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Cómo deseas importar los registros del archivo?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="sm:justify-center">
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => processImport('add')}>Agregar a existentes</AlertDialogAction>
-            <AlertDialogAction onClick={() => processImport('replace')} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Reemplazar todo</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 };
@@ -626,3 +678,5 @@ export default function RecordsPage() {
         </div>
     );
 }
+
+    
