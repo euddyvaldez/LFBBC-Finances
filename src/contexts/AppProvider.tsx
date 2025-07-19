@@ -1,12 +1,14 @@
 
 'use client';
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
-import type { FinancialRecord, Integrante, Razon } from '@/types';
+import type { FinancialRecord, Integrante, Razon, Movimiento } from '@/types';
 import * as api from '@/lib/data';
-import { onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { onSnapshot, collection, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '@/lib/firebase';
 import { useAuth } from './AuthProvider';
-import { parse, isValid, startOfDay } from 'date-fns';
+import { parse, isValid, startOfDay, format } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
+
 
 interface AppContextType {
   integrantes: Integrante[];
@@ -29,12 +31,38 @@ interface AppContextType {
   deleteRazon: (id: string) => Promise<void>;
 }
 
+type PendingOperation = 
+  | { type: 'addFinancialRecord', payload: Omit<FinancialRecord, 'id' | 'userId'> }
+  | { type: 'updateFinancialRecord', payload: { id: string, updates: Partial<Omit<FinancialRecord, 'id' | 'userId'>> } }
+  | { type: 'deleteFinancialRecord', payload: { id: string } }
+  | { type: 'addIntegrante', payload: { nombre: string, isProtected?: boolean } }
+  | { type: 'updateIntegrante', payload: { id: string, nombre: string } }
+  | { type: 'deleteIntegrante', payload: { id: string } }
+  | { type: 'addRazon', payload: { descripcion: string, isQuickReason?: boolean, isProtected?: boolean } }
+  | { type: 'updateRazon', payload: { id: string, updates: Partial<Omit<Razon, 'id' | 'userId'>> } }
+  | { type: 'deleteRazon', payload: { id: string } };
+
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const parseDate = (dateStr: string) => parse(dateStr, 'dd/MM/yyyy', new Date());
 
 // Since auth is removed, we use a default user ID for all operations.
 const DEFAULT_USER_ID = 'default-user';
+
+
+const getFromLocalStorage = <T>(key: string, defaultValue: T): T => {
+    if (typeof window === 'undefined') return defaultValue;
+    const storedValue = window.localStorage.getItem(key);
+    return storedValue ? JSON.parse(storedValue) : defaultValue;
+};
+
+const setToLocalStorage = <T>(key: string, value: T) => {
+    if (typeof window !== 'undefined') {
+        window.localStorage.setItem(key, JSON.stringify(value));
+    }
+};
+
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [integrantes, setIntegrantes] = useState<Integrante[]>([]);
@@ -43,17 +71,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  const [pendingOps, setPendingOps] = useState<PendingOperation[]>(getFromLocalStorage('pendingOps', []));
+
   useEffect(() => {
+    setToLocalStorage('pendingOps', pendingOps);
+  }, [pendingOps]);
+
+  const addPendingOp = (op: PendingOperation) => {
+      setPendingOps(prev => [...prev, op]);
+  }
+
+  useEffect(() => {
+    setLoading(true);
+
     if (!isFirebaseConfigured) {
-      setIntegrantes([]);
-      setRazones([]);
-      setFinancialRecords([]);
-      setLoading(false);
-      console.error("Firebase is not configured. Data operations will not work.");
-      return;
+        console.warn("Firebase is not configured. Running in offline mode.");
+        setIntegrantes(getFromLocalStorage('integrantes', []));
+        setRazones(getFromLocalStorage('razones', []));
+        setFinancialRecords(getFromLocalStorage('financialRecords', []));
+        setLoading(false);
+        return;
+    }
+
+    // --- Firebase is configured, run online logic ---
+    const syncPendingOperations = async () => {
+        if (pendingOps.length === 0) return;
+        console.log(`Syncing ${pendingOps.length} pending operations...`);
+        
+        let success = true;
+        for (const op of pendingOps) {
+            try {
+                switch(op.type) {
+                    case 'addFinancialRecord': await api.addFinancialRecord(op.payload, DEFAULT_USER_ID); break;
+                    case 'updateFinancialRecord': await api.updateFinancialRecord(op.payload.id, op.payload.updates); break;
+                    case 'deleteFinancialRecord': await api.deleteFinancialRecord(op.payload.id); break;
+                    case 'addIntegrante': await api.addIntegrante(op.payload.nombre, op.payload.isProtected, DEFAULT_USER_ID); break;
+                    case 'updateIntegrante': await api.updateIntegrante(op.payload.id, op.payload.nombre); break;
+                    case 'deleteIntegrante': await api.deleteIntegrante(op.payload.id); break;
+                    case 'addRazon': await api.addRazon(op.payload.descripcion, op.payload.isProtected, op.payload.isQuickReason, DEFAULT_USER_ID); break;
+                    case 'updateRazon': await api.updateRazon(op.payload.id, op.payload.updates); break;
+                    case 'deleteRazon': await api.deleteRazon(op.payload.id); break;
+                }
+            } catch(e) {
+                console.error("Failed to sync operation:", op, e);
+                success = false;
+                // If one op fails, stop syncing to maintain order
+                break;
+            }
+        }
+
+        if (success) {
+            console.log("All pending operations synced successfully.");
+            setPendingOps([]); // Clear the queue
+        }
     };
 
-    setLoading(true);
+    syncPendingOperations();
 
     const createQuery = (collectionName: string) => query(collection(db, collectionName), where("userId", "==", DEFAULT_USER_ID));
 
@@ -61,29 +134,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       onSnapshot(createQuery('integrantes'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Integrante));
         setIntegrantes(data);
-      }, (err) => {
-        setError(err);
-        console.error("Error fetching integrantes:", err);
-      }),
+        setToLocalStorage('integrantes', data);
+      }, (err) => { setError(err); console.error("Error fetching integrantes:", err); }),
+      
       onSnapshot(createQuery('razones'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Razon));
         setRazones(data);
-      }, (err) => {
-        setError(err);
-        console.error("Error fetching razones:", err);
-      }),
+        setToLocalStorage('razones', data);
+      }, (err) => { setError(err); console.error("Error fetching razones:", err); }),
+      
       onSnapshot(createQuery('financialRecords'), (snapshot) => {
         const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinancialRecord));
         setFinancialRecords(data);
+        setToLocalStorage('financialRecords', data);
         setLoading(false);
-      }, (err) => {
-        setError(err);
-        setLoading(false);
-        console.error("Error fetching financial records:", err);
-      })
+      }, (err) => { setError(err); setLoading(false); console.error("Error fetching financial records:", err); })
     ];
 
-    // Seed initial data if it doesn't exist for the default user
     const seedData = async () => {
         const q = query(collection(db, 'razones'), where("userId", "==", DEFAULT_USER_ID));
         const snapshot = await getDocs(q);
@@ -98,11 +165,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
     seedData();
 
-
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-    };
-  }, []);
+    return () => unsubscribers.forEach(unsub => unsub());
+  }, [isFirebaseConfigured]);
 
   const recordDates = useMemo(() => {
     const dates = new Set<number>();
@@ -117,25 +181,108 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return dates;
   }, [financialRecords]);
 
-  const addFinancialRecordDefaultUser = (record: Omit<FinancialRecord, 'id' | 'userId'>) => {
-    return api.addFinancialRecord(record, DEFAULT_USER_ID);
-  }
-  const importFinancialRecordsDefaultUser = (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-    return api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
+  // --- Wrapped API Functions for Offline Support ---
+
+  const addFinancialRecord = async (record: Omit<FinancialRecord, 'id' | 'userId'>) => {
+    if (isFirebaseConfigured) {
+      return api.addFinancialRecord(record, DEFAULT_USER_ID);
+    }
+    const newRecord: FinancialRecord = { ...record, id: uuidv4(), userId: DEFAULT_USER_ID };
+    let monto = newRecord.monto;
+    if ((newRecord.movimiento === 'GASTOS' || newRecord.movimiento === 'INVERSION') && monto > 0) monto = -monto;
+    if (newRecord.movimiento === 'INGRESOS' && monto < 0) monto = Math.abs(monto);
+    newRecord.monto = monto;
+
+    setFinancialRecords(prev => [...prev, newRecord]);
+    addPendingOp({ type: 'addFinancialRecord', payload: record });
   };
-  const addIntegranteDefaultUser = (nombre: string, isProtected?: boolean) => {
-     return api.addIntegrante(nombre, isProtected, DEFAULT_USER_ID);
-  }
-   const importIntegrantesDefaultUser = (integrantes: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-    return api.importIntegrantes(integrantes, mode, DEFAULT_USER_ID);
-  };
-   const addRazonDefaultUser = (descripcion: string, isQuickReason?: boolean, isProtected?: boolean) => {
-    return api.addRazon(descripcion, isQuickReason, isProtected, DEFAULT_USER_ID);
-  }
-  const importRazonesDefaultUser = (razones: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-    return api.importRazones(razones, mode, DEFAULT_USER_ID);
+  
+  const updateFinancialRecord = async (id: string, updates: Partial<Omit<FinancialRecord, 'id' | 'userId'>>) => {
+      if (isFirebaseConfigured) {
+          return api.updateFinancialRecord(id, updates);
+      }
+      setFinancialRecords(prev => prev.map(r => r.id === id ? { ...r, ...updates, fecha: updates.fecha || r.fecha } : r));
+      addPendingOp({ type: 'updateFinancialRecord', payload: { id, updates } });
   };
 
+  const deleteFinancialRecord = async (id: string) => {
+      if (isFirebaseConfigured) {
+          return api.deleteFinancialRecord(id);
+      }
+      setFinancialRecords(prev => prev.filter(r => r.id !== id));
+      addPendingOp({ type: 'deleteFinancialRecord', payload: { id } });
+  };
+  
+  const addIntegrante = async (nombre: string, isProtected = false) => {
+    if (isFirebaseConfigured) {
+      return api.addIntegrante(nombre, isProtected, DEFAULT_USER_ID);
+    }
+    const newIntegrante: Integrante = { id: uuidv4(), nombre: nombre.toUpperCase(), isProtected, userId: DEFAULT_USER_ID };
+    setIntegrantes(prev => [...prev, newIntegrante]);
+    addPendingOp({ type: 'addIntegrante', payload: { nombre, isProtected } });
+  };
+
+  const updateIntegrante = async (id: string, nombre: string) => {
+      if (isFirebaseConfigured) {
+          return api.updateIntegrante(id, nombre);
+      }
+      setIntegrantes(prev => prev.map(i => i.id === id ? { ...i, nombre: nombre.toUpperCase() } : i));
+      addPendingOp({ type: 'updateIntegrante', payload: { id, nombre } });
+  };
+
+  const deleteIntegrante = async (id: string) => {
+      if (isFirebaseConfigured) {
+          return api.deleteIntegrante(id);
+      }
+      setIntegrantes(prev => prev.filter(i => i.id !== id));
+      addPendingOp({ type: 'deleteIntegrante', payload: { id } });
+  };
+
+  const addRazon = async (descripcion: string, isQuickReason = false, isProtected = false) => {
+      if (isFirebaseConfigured) {
+        return api.addRazon(descripcion, isQuickReason, isProtected, DEFAULT_USER_ID);
+      }
+      const newRazon: Razon = { id: uuidv4(), descripcion: descripcion.toUpperCase(), isQuickReason, isProtected, userId: DEFAULT_USER_ID };
+      setRazones(prev => [...prev, newRazon]);
+      addPendingOp({ type: 'addRazon', payload: { descripcion, isQuickReason, isProtected } });
+  };
+
+  const updateRazon = async (id: string, updates: Partial<Omit<Razon, 'id' | 'userId'>>) => {
+      if (isFirebaseConfigured) {
+          return api.updateRazon(id, updates);
+      }
+      setRazones(prev => prev.map(r => r.id === id ? { ...r, ...updates, descripcion: (updates.descripcion || r.descripcion).toUpperCase() } : r));
+      addPendingOp({ type: 'updateRazon', payload: { id, updates } });
+  };
+  
+  const deleteRazon = async (id: string) => {
+      if (isFirebaseConfigured) {
+          return api.deleteRazon(id);
+      }
+      setRazones(prev => prev.filter(r => r.id !== id));
+      addPendingOp({ type: 'deleteRazon', payload: { id } });
+  };
+
+  const importFinancialRecords = async (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      if(isFirebaseConfigured) {
+        return api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
+      }
+      console.warn("Import is disabled in offline mode.");
+  };
+
+  const importIntegrantes = async (integrantes: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      if(isFirebaseConfigured) {
+        return api.importIntegrantes(integrantes, mode, DEFAULT_USER_ID);
+      }
+      console.warn("Import is disabled in offline mode.");
+  };
+
+  const importRazones = async (razones: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+      if(isFirebaseConfigured) {
+        return api.importRazones(razones, mode, DEFAULT_USER_ID);
+      }
+      console.warn("Import is disabled in offline mode.");
+  };
 
   const value: AppContextType = {
     integrantes,
@@ -144,18 +291,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     recordDates,
     loading,
     error,
-    addFinancialRecord: addFinancialRecordDefaultUser,
-    updateFinancialRecord: api.updateFinancialRecord,
-    deleteFinancialRecord: api.deleteFinancialRecord,
-    importFinancialRecords: importFinancialRecordsDefaultUser,
-    addIntegrante: addIntegranteDefaultUser,
-    importIntegrantes: importIntegrantesDefaultUser,
-    updateIntegrante: api.updateIntegrante,
-    deleteIntegrante: api.deleteIntegrante,
-    addRazon: addRazonDefaultUser,
-    importRazones: importRazonesDefaultUser,
-    updateRazon: api.updateRazon,
-    deleteRazon: api.deleteRazon,
+    addFinancialRecord,
+    updateFinancialRecord,
+    deleteFinancialRecord,
+    importFinancialRecords,
+    addIntegrante,
+    updateIntegrante,
+    deleteIntegrante,
+    importIntegrantes,
+    addRazon,
+    updateRazon,
+    deleteRazon,
+    importRazones,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -168,3 +315,5 @@ export function useAppContext() {
   }
   return context;
 }
+
+    
