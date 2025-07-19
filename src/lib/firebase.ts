@@ -28,6 +28,11 @@ if (isFirebaseConfigured) {
 } else {
     // If not configured, we cannot use firebase services. 
     // The rest of the code will check `isFirebaseConfigured` before making calls.
+    const unconfiguredError = () => {
+        throw new Error("Firebase is not configured. Please check your .env.local file.");
+    }
+    db = new Proxy({}, { get: unconfiguredError }) as Firestore;
+    auth = new Proxy({}, { get: unconfiguredError }) as Auth;
 }
 
 
