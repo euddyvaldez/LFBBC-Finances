@@ -263,10 +263,10 @@ export default function ReasonsPage() {
                     <SelectItem value="id-desc">ID (Descendente)</SelectItem>
                 </SelectContent>
             </Select>
-             <div className="flex flex-col sm:flex-row gap-2">
+             <div className="grid grid-cols-2 md:flex md:flex-row gap-2">
                 <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
                   <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full md:w-auto"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
+                      <Button variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
                   </DialogTrigger>
                   <DialogContent>
                       <DialogHeader>
@@ -320,7 +320,7 @@ export default function ReasonsPage() {
                       </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <Button onClick={exportToCSV} variant="outline" className="w-full md:w-auto"><Download className="mr-2 h-4 w-4"/>Exportar CSV</Button>
+                <Button onClick={exportToCSV} variant="outline" className="w-full"><Download className="mr-2 h-4 w-4"/>Exportar CSV</Button>
             </div>
           </div>
         </CardHeader>
@@ -384,3 +384,5 @@ export default function ReasonsPage() {
     </div>
   );
 }
+
+  
