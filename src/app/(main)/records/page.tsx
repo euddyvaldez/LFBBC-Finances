@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/AuthProvider';
 import { Label } from '@/components/ui/label';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import * as api from '@/lib/data';
 
 const DESCRIPTION_MAX_LENGTH = 500;
 
@@ -302,7 +303,7 @@ const RecordCard = ({ record, getIntegranteName, getRazonDesc }: { record: Finan
 };
 
 const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
-  const { integrantes, razones, importFinancialRecords, importFinancialRecordsLocal } = useAppContext();
+  const { integrantes, razones, importFinancialRecordsLocal } = useAppContext();
   const { toast } = useToast();
   const [filter, setFilter] = useState('');
   const [filterField, setFilterField] = useState('descripcion');
@@ -460,11 +461,12 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
 
             if (recordsToImport.length > 0) {
                 if (importDestination === 'cloud') {
-                    await importFinancialRecords(recordsToImport, importMode);
+                    await api.importFinancialRecords(recordsToImport, importMode, 'default-user');
+                    toast({ title: 'Éxito', description: `Importación a la nube completa.` });
                 } else {
                     await importFinancialRecordsLocal(recordsToImport, importMode);
+                    toast({ title: 'Éxito', description: `Importación local completa.` });
                 }
-                toast({ title: 'Éxito', description: `${recordsToImport.length} registros importados en modo "${importMode}".` });
             } else {
                 toast({ title: 'Información', description: 'No se encontraron nuevos registros para importar.' });
             }
@@ -554,8 +556,8 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
                                     </Label>
                                 </div>
                                 <div>
-                                    <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" />
-                                    <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                    <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
+                                    <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
                                         <Cloud className="mb-3 h-6 w-6" />
                                         Nube
                                     </Label>

@@ -45,7 +45,6 @@ const dummyUser: User = {
 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
 
   const logout = async () => {
     // In a real scenario, this would redirect to a login page.

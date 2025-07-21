@@ -4,22 +4,55 @@
 import { useAppContext } from '@/contexts/AppProvider';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Eye, EyeOff, Loader2, ArrowRight, Zap, PieChart, Users, BookCopy, BarChart3, Repeat, TrendingUp } from 'lucide-react';
+import { Eye, EyeOff, Loader2, ArrowRight, Zap, PieChart, Users, BookCopy, BarChart3, Repeat, TrendingUp, Cloud, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { getCitas } from '@/lib/data';
-import type { Cita, FinancialRecord, Razon } from '@/types';
+import type { Cita } from '@/types';
 import Link from 'next/link';
-import { format, startOfMonth, endOfMonth, isWithinInterval, parse, isValid, getDay, getDaysInMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isWithinInterval, parse, isValid, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
+import { isFirebaseConfigured } from '@/lib/firebase';
 
 const parseDate = (dateStr: string) => parse(dateStr, 'dd/MM/yyyy', new Date());
 
 export default function DashboardPage() {
-  const { financialRecords, loading, razones, integrantes } = useAppContext();
+  const { financialRecords, loading, razones, integrantes, syncWithCloud } = useAppContext();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [citas, setCitas] = useState<Cita[]>([]);
   const [currentCitaIndex, setCurrentCitaIndex] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const { toast } = useToast();
+
+  const handleSync = async () => {
+    if (!isFirebaseConfigured) {
+        toast({
+            variant: 'destructive',
+            title: 'Error de Configuración',
+            description: 'Firebase no está configurado. No se puede sincronizar.',
+        });
+        return;
+    }
+    setIsSyncing(true);
+    try {
+        await syncWithCloud();
+        toast({
+            title: 'Sincronización Completa',
+            description: 'Tus datos locales se han sincronizado con la nube.',
+        });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Ocurrió un error desconocido.';
+        toast({
+            variant: 'destructive',
+            title: 'Error de Sincronización',
+            description: message,
+        });
+    } finally {
+        setIsSyncing(false);
+    }
+  };
+
 
   useEffect(() => {
     const fetchCitas = async () => {
@@ -105,7 +138,10 @@ export default function DashboardPage() {
 
     // --- Top 5 Reasons Logic ---
     const reasonCounts = monthlyRecords.reduce((acc, record) => {
-        acc[record.razonId] = (acc[record.razonId] || 0) + 1;
+        const razonId = record.razonId;
+        if(razonId) {
+            acc[razonId] = (acc[razonId] || 0) + 1;
+        }
         return acc;
     }, {} as Record<string, number>);
 
@@ -157,7 +193,7 @@ export default function DashboardPage() {
   const getIntegranteName = (id: string) => integrantes.find((i) => i.id === id)?.nombre || 'N/A';
   const getRazonDesc = (id: string) => razones.find((r) => r.id === id)?.descripcion || 'N/A';
 
-  if (loading) {
+  if (loading && !isSyncing) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-10rem)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -167,8 +203,32 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Inicio</h1>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Inicio</h1>
+        <Button onClick={handleSync} disabled={isSyncing || !isFirebaseConfigured} className="w-full sm:w-auto">
+            {isSyncing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+                <Cloud className="mr-2 h-4 w-4" />
+            )}
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar con la Nube'}
+        </Button>
+      </div>
       
+      {!isFirebaseConfigured && (
+          <Card className="bg-yellow-50 border-yellow-300 dark:bg-yellow-950 dark:border-yellow-800">
+              <CardContent className="p-4 flex items-center gap-4">
+                  <AlertCircle className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+                  <div>
+                      <p className="font-bold text-yellow-800 dark:text-yellow-200">Modo Local Activado</p>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                          Firebase no está configurado. Todos los datos se guardan solo en este dispositivo.
+                      </p>
+                  </div>
+              </CardContent>
+          </Card>
+      )}
+
       <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Main Balance Card */}
         <Card className="lg:col-span-2 shadow-lg">
@@ -336,5 +396,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

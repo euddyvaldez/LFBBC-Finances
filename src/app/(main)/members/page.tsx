@@ -16,10 +16,11 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import { parseCsvLine } from '@/lib/utils';
+import * as api from '@/lib/data';
 
 
 export default function MembersPage() {
-  const { integrantes, addIntegrante, updateIntegrante, deleteIntegrante, financialRecords, loading, importIntegrantes, importIntegrantesLocal } = useAppContext();
+  const { integrantes, addIntegrante, updateIntegrante, deleteIntegrante, financialRecords, loading, importIntegrantesLocal } = useAppContext();
   const { toast } = useToast();
 
   const [newIntegranteName, setNewIntegranteName] = useState('');
@@ -149,7 +150,6 @@ export default function MembersPage() {
         }
 
         let integrantesToImport: Omit<Integrante, 'id' | 'userId'>[] = [];
-        const existingNames = new Set(integrantes.map(i => i.nombre.toLowerCase()));
 
         for (let i = 1; i < lines.length; i++) {
           const values = parseCsvLine(lines[i]);
@@ -161,17 +161,14 @@ export default function MembersPage() {
           }
         }
         
-        if (importMode === 'add') {
-          integrantesToImport = integrantesToImport.filter(i => !existingNames.has(i.nombre.toLowerCase()));
-        }
-
         if (integrantesToImport.length > 0) {
           if (importDestination === 'cloud') {
-              await importIntegrantes(integrantesToImport, importMode);
+              await api.importIntegrantes(integrantesToImport, importMode, 'default-user');
+              toast({ title: 'Éxito', description: `Importación a la nube completa.` });
           } else {
               await importIntegrantesLocal(integrantesToImport, importMode);
+              toast({ title: 'Éxito', description: `Importación local completa.` });
           }
-          toast({ title: 'Éxito', description: `Importación completa. ${integrantesToImport.length} registros afectados.` });
         } else {
           toast({ title: 'Información', description: 'No se encontraron nuevos integrantes para importar o no hay cambios.' });
         }
@@ -282,8 +279,8 @@ export default function MembersPage() {
                                       </Label>
                                   </div>
                                   <div>
-                                      <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" />
-                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                      <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
+                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
                                           <Cloud className="mb-3 h-6 w-6" />
                                           Nube
                                       </Label>

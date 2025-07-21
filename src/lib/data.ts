@@ -14,6 +14,15 @@ const CitasData: Cita[] = [
 
 // --- API Functions ---
 
+// Generic data fetcher
+export const getData = async (collectionName: string, userId: string) => {
+    if (!userId) throw new Error("User ID is required");
+    const q = query(collection(db, collectionName), where("userId", "==", userId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+
 // Integrantes
 export const addIntegrante = async (nombre: string, isProtected = false, userId: string): Promise<void> => {
   if (!userId) throw new Error("User ID is required");
@@ -29,10 +38,10 @@ export const addIntegrante = async (nombre: string, isProtected = false, userId:
 export const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace', userId: string): Promise<void> => {
   const batch = writeBatch(db);
   const integrantesCol = collection(db, 'integrantes');
-  
+  const q = query(integrantesCol, where("userId", "==", userId));
+  const snapshot = await getDocs(q);
+
   if (mode === 'replace') {
-    const q = query(integrantesCol, where("userId", "==", userId));
-    const snapshot = await getDocs(q);
     snapshot.docs.forEach(doc => {
       if (!doc.data().isProtected) {
         batch.delete(doc.ref);
@@ -40,7 +49,12 @@ export const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'i
     });
   }
   
+  const existingNames = new Set(snapshot.docs.map(doc => doc.data().nombre.toLowerCase()));
+
   for (const integrante of integrantesToImport) {
+    if (mode === 'add' && existingNames.has(integrante.nombre.toLowerCase())) {
+        continue;
+    }
     const newDocRef = doc(integrantesCol);
     batch.set(newDocRef, { ...integrante, nombre: integrante.nombre.toUpperCase(), userId });
   }
@@ -82,10 +96,10 @@ export const addRazon = async (descripcion: string, isQuickReason = false, isPro
 export const importRazones = async (razonesToImport: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace', userId: string): Promise<void> => {
     const batch = writeBatch(db);
     const razonesCol = collection(db, 'razones');
-    
+    const q = query(razonesCol, where("userId", "==", userId));
+    const snapshot = await getDocs(q);
+
     if (mode === 'replace') {
-        const q = query(razonesCol, where("userId", "==", userId));
-        const snapshot = await getDocs(q);
         snapshot.docs.forEach(doc => {
           if (!doc.data().isProtected) {
             batch.delete(doc.ref);
@@ -93,7 +107,12 @@ export const importRazones = async (razonesToImport: Omit<Razon, 'id' | 'userId'
         });
     }
 
+    const existingDescriptions = new Set(snapshot.docs.map(doc => doc.data().descripcion.toLowerCase()));
+
     for (const razon of razonesToImport) {
+        if(mode === 'add' && existingDescriptions.has(razon.descripcion.toLowerCase())) {
+            continue;
+        }
         const newDocRef = doc(razonesCol);
         batch.set(newDocRef, { ...razon, descripcion: razon.descripcion.toUpperCase(), userId });
     }
