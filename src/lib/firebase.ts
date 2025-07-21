@@ -14,24 +14,39 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Check if the firebase config has been filled out
-export const isFirebaseConfigured = true;
+// Function to check if the firebase config has been filled out
+const checkFirebaseConfig = () => {
+    return (
+        firebaseConfig.apiKey &&
+        firebaseConfig.authDomain &&
+        firebaseConfig.projectId &&
+        firebaseConfig.storageBucket &&
+        firebaseConfig.messagingSenderId &&
+        firebaseConfig.appId &&
+        !firebaseConfig.apiKey.includes("mock")
+    );
+};
 
-let app: FirebaseApp;
-let db: Firestore;
-let auth: Auth;
+export const isFirebaseConfigured = checkFirebaseConfig();
 
-try {
-    app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    auth = getAuth(app);
-} catch (e) {
-    console.error("Firebase initialization error:", e);
-    const unconfiguredError = () => {
-        throw new Error("Firebase is not configured. Please check your .env.local file.");
-    }
-    db = new Proxy({}, { get: unconfiguredError }) as Firestore;
-    auth = new Proxy({}, { get: unconfiguredError }) as Auth;
+let app: FirebaseApp | null = null;
+let db: Firestore | null = null;
+let auth: Auth | null = null;
+
+if (isFirebaseConfigured) {
+  try {
+      app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      auth = getAuth(app);
+  } catch (e) {
+      console.error("Firebase initialization error:", e);
+      // Reset to null if initialization fails
+      app = null;
+      db = null;
+      auth = null;
+  }
+} else {
+    console.warn("Firebase is not configured. Running in offline mode.");
 }
 
 
