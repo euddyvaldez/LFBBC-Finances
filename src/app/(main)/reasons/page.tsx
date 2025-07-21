@@ -302,7 +302,6 @@ export default function ReasonsPage() {
                                       </Label>
                                   </div>
                               </RadioGroup>
-                              {!isFirebaseConfigured && <p className="text-xs text-destructive mt-2">La importación a la nube está deshabilitada porque Firebase no está configurado.</p>}
                           </div>
                           <div>
                              <Label>Modo de Importación</Label>

@@ -15,19 +15,18 @@ const firebaseConfig = {
 };
 
 // Check if the firebase config has been filled out
-export const isFirebaseConfigured = !!firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('REPLACE_WITH_YOUR');
+export const isFirebaseConfigured = true;
 
 let app: FirebaseApp;
 let db: Firestore;
 let auth: Auth;
 
-if (isFirebaseConfigured) {
+try {
     app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     db = getFirestore(app);
     auth = getAuth(app);
-} else {
-    // If not configured, we cannot use firebase services. 
-    // The rest of the code will check `isFirebaseConfigured` before making calls.
+} catch (e) {
+    console.error("Firebase initialization error:", e);
     const unconfiguredError = () => {
         throw new Error("Firebase is not configured. Please check your .env.local file.");
     }
