@@ -26,28 +26,11 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   const handleSync = async () => {
-    if (!isFirebaseConfigured) {
-        toast({
-            variant: 'destructive',
-            title: 'Error de Configuración',
-            description: 'Firebase no está configurado. No se puede sincronizar.',
-        });
-        return;
-    }
     setIsSyncing(true);
     try {
         await syncWithCloud();
-        toast({
-            title: 'Sincronización Completa',
-            description: 'Tus datos locales se han sincronizado con la nube.',
-        });
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'Ocurrió un error desconocido.';
-        toast({
-            variant: 'destructive',
-            title: 'Error de Sincronización',
-            description: message,
-        });
+        // Toast is handled within syncWithCloud
     } finally {
         setIsSyncing(false);
     }
@@ -107,7 +90,7 @@ export default function DashboardPage() {
         .reduce((acc, r) => acc + (r.monto || 0), 0);
 
     const recentRecords = [...validRecords]
-      .sort((a, b) => parseDate(b.fecha).getTime() - parseDate(a.fecha).getTime())
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
       .slice(0, 5);
 
     const uniqueIntegrantesInMonth = new Set(monthlyRecords.map(r => r.integranteId));

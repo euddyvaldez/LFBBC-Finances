@@ -16,7 +16,6 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import { parseCsvLine } from '@/lib/utils';
-import * as api from '@/lib/data';
 
 
 export default function MembersPage() {
@@ -149,7 +148,7 @@ export default function MembersPage() {
           throw new Error('La columna "nombre" no fue encontrada en el CSV.');
         }
 
-        let integrantesToImport: Omit<Integrante, 'id' | 'userId'>[] = [];
+        let integrantesToImport: Omit<Integrante, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[] = [];
 
         for (let i = 1; i < lines.length; i++) {
           const values = parseCsvLine(lines[i]);
@@ -163,12 +162,12 @@ export default function MembersPage() {
         
         if (integrantesToImport.length > 0) {
           if (importDestination === 'cloud') {
-              await api.importIntegrantes(integrantesToImport, importMode, 'default-user');
-              toast({ title: 'Éxito', description: `Importación a la nube completa.` });
-          } else {
-              await importIntegrantesLocal(integrantesToImport, importMode);
-              toast({ title: 'Éxito', description: `Importación local completa.` });
+              // Cloud import is handled via sync, for now this is local only
+              toast({ title: 'Información', description: `La importación a la nube se realizará en la próxima sincronización.` });
           }
+          await importIntegrantesLocal(integrantesToImport, importMode);
+          toast({ title: 'Éxito', description: `Importación local completa.` });
+          
         } else {
           toast({ title: 'Información', description: 'No se encontraron nuevos integrantes para importar o no hay cambios.' });
         }
@@ -258,7 +257,7 @@ export default function MembersPage() {
                       <DialogHeader>
                           <DialogTitle>Importar Integrantes desde CSV</DialogTitle>
                           <DialogDescription>
-                              Selecciona el archivo, el destino y el modo de importación.
+                              Los datos se importarán al almacenamiento local y se sincronizarán con la nube la próxima vez que presiones "Sincronizar".
                           </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
@@ -267,27 +266,6 @@ export default function MembersPage() {
                               <Input id="csv-file" type="file" accept=".csv" onChange={handleFileSelected} ref={importFileInputRef} />
                               {importFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {importFile.name}</p>}
                           </div>
-
-                          <div>
-                              <Label>Destino de Importación</Label>
-                              <RadioGroup value={importDestination} onValueChange={(v) => setImportDestination(v as 'local' | 'cloud')} className="mt-2 grid grid-cols-2 gap-4">
-                                  <div>
-                                      <RadioGroupItem value="local" id="local" className="peer sr-only" />
-                                      <Label htmlFor="local" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                          <HardDrive className="mb-3 h-6 w-6" />
-                                          Local
-                                      </Label>
-                                  </div>
-                                  <div>
-                                      <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
-                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
-                                          <Cloud className="mb-3 h-6 w-6" />
-                                          Nube
-                                      </Label>
-                                  </div>
-                              </RadioGroup>
-                          </div>
-
                           <div>
                              <Label>Modo de Importación</Label>
                              <Select value={importMode} onValueChange={(v) => setImportMode(v as 'add' | 'replace')}>

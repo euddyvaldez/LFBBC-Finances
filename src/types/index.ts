@@ -1,23 +1,26 @@
+
 export type Movimiento = 'INGRESOS' | 'GASTOS' | 'INVERSION';
 
-export interface Razon {
+interface BaseEntity {
   id: string;
   userId: string;
+  createdAt: number; // Unix timestamp
+  updatedAt: number; // Unix timestamp
+  isDeleted?: boolean;
+}
+
+export interface Razon extends BaseEntity {
   descripcion: string;
   isQuickReason: boolean;
   isProtected?: boolean;
 }
 
-export interface Integrante {
-  id: string;
-  userId: string;
+export interface Integrante extends BaseEntity {
   nombre: string;
   isProtected?: boolean;
 }
 
-export interface FinancialRecord {
-  id: string;
-  userId: string;
+export interface FinancialRecord extends BaseEntity {
   fecha: string; // 'dd/MM/yyyy'
   integranteId: string;
   razonId: string;

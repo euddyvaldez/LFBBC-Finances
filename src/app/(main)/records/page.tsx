@@ -26,7 +26,7 @@ import { useAuth } from '@/contexts/AuthProvider';
 import { Label } from '@/components/ui/label';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import * as api from '@/lib/data';
+
 
 const DESCRIPTION_MAX_LENGTH = 500;
 
@@ -310,7 +310,6 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
 
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importDestination, setImportDestination] = useState<'local' | 'cloud'>(isFirebaseConfigured ? 'cloud' : 'local');
   const [importMode, setImportMode] = useState<'add' | 'replace'>('add');
   const importFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -321,12 +320,7 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
   const getRazonDesc = (id: string) => razones.find((r) => r.id === id)?.descripcion || 'N/A';
   
   const filteredRecords = useMemo(() => {
-    const sortedRecords = [...records].sort((a, b) => {
-        const dateA = a.fecha ? parseDate(a.fecha).getTime() : 0;
-        const dateB = b.fecha ? parseDate(b.fecha).getTime() : 0;
-        if (isNaN(dateA) || isNaN(dateB)) return 0;
-        return dateB - dateA;
-    });
+    const sortedRecords = [...records].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     if (!filter) return sortedRecords;
     return sortedRecords.filter((record) => {
@@ -408,7 +402,7 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
               throw new Error(`Faltan las siguientes columnas en el CSV: ${missingHeaders.join(', ')}`);
             }
             
-            const recordsToImport: Omit<FinancialRecord, 'id' | 'userId'>[] = [];
+            const recordsToImport: Omit<FinancialRecord, 'id' | 'userId'| 'createdAt' | 'updatedAt'>[] = [];
             const errors: string[] = [];
 
             const integranteMap = new Map(integrantes.map(i => [i.nombre.toLowerCase(), i.id]));
@@ -460,13 +454,8 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
             }
 
             if (recordsToImport.length > 0) {
-                if (importDestination === 'cloud') {
-                    await api.importFinancialRecords(recordsToImport, importMode, 'default-user');
-                    toast({ title: 'Éxito', description: `Importación a la nube completa.` });
-                } else {
-                    await importFinancialRecordsLocal(recordsToImport, importMode);
-                    toast({ title: 'Éxito', description: `Importación local completa.` });
-                }
+                await importFinancialRecordsLocal(recordsToImport, importMode);
+                toast({ title: 'Éxito', description: `Importación local completa. Los cambios se sincronizarán con la nube.` });
             } else {
                 toast({ title: 'Información', description: 'No se encontraron nuevos registros para importar.' });
             }
@@ -534,9 +523,9 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Importar Registros desde CSV</DialogTitle>
-                        <DialogDescription>
-                            Selecciona el archivo, el destino y el modo de importación.
-                        </DialogDescription>
+                         <DialogDescription>
+                              Los datos se importarán al almacenamiento local y se sincronizarán con la nube la próxima vez que presiones "Sincronizar".
+                          </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -544,27 +533,6 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
                             <Input id="csv-file" type="file" accept=".csv" onChange={handleFileSelected} ref={importFileInputRef} />
                             {importFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {importFile.name}</p>}
                         </div>
-
-                        <div>
-                            <Label>Destino de Importación</Label>
-                            <RadioGroup value={importDestination} onValueChange={(v) => setImportDestination(v as 'local' | 'cloud')} className="mt-2 grid grid-cols-2 gap-4">
-                                <div>
-                                    <RadioGroupItem value="local" id="local" className="peer sr-only" />
-                                    <Label htmlFor="local" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                        <HardDrive className="mb-3 h-6 w-6" />
-                                        Local
-                                    </Label>
-                                </div>
-                                <div>
-                                    <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
-                                    <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
-                                        <Cloud className="mb-3 h-6 w-6" />
-                                        Nube
-                                    </Label>
-                                </div>
-                            </RadioGroup>
-                        </div>
-
                         <div>
                            <Label>Modo de Importación</Label>
                            <Select value={importMode} onValueChange={(v) => setImportMode(v as 'add' | 'replace')}>

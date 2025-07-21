@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { isFirebaseConfigured } from '@/lib/firebase';
 import { parseCsvLine } from '@/lib/utils';
-import * as api from '@/lib/data';
+
 
 export default function ReasonsPage() {
   const { razones, addRazon, updateRazon, deleteRazon, financialRecords, loading, importRazonesLocal } = useAppContext();
@@ -31,7 +31,6 @@ export default function ReasonsPage() {
 
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importDestination, setImportDestination] = useState<'local' | 'cloud'>(isFirebaseConfigured ? 'cloud' : 'local');
   const [importMode, setImportMode] = useState<'add' | 'replace'>('add');
   const importFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -162,7 +161,7 @@ export default function ReasonsPage() {
           throw new Error('La columna "descripcion" no fue encontrada en el CSV.');
         }
 
-        let razonesToImport: Omit<Razon, 'id' | 'userId'>[] = [];
+        let razonesToImport: Omit<Razon, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[] = [];
 
         for (let i = 1; i < lines.length; i++) {
           const values = parseCsvLine(lines[i]);
@@ -176,13 +175,8 @@ export default function ReasonsPage() {
         }
         
         if (razonesToImport.length > 0) {
-          if (importDestination === 'cloud') {
-              await api.importRazones(razonesToImport, importMode, 'default-user');
-              toast({ title: 'Éxito', description: `Importación a la nube completa.` });
-          } else {
-              await importRazonesLocal(razonesToImport, importMode);
-              toast({ title: 'Éxito', description: `Importación local completa.` });
-          }
+            await importRazonesLocal(razonesToImport, importMode);
+            toast({ title: 'Éxito', description: `Importación local completa. Los cambios se sincronizarán con la nube.` });
         } else {
           toast({ title: 'Información', description: 'No se encontraron nuevas razones para importar o no hay cambios.' });
         }
@@ -273,8 +267,8 @@ export default function ReasonsPage() {
                   <DialogContent>
                       <DialogHeader>
                           <DialogTitle>Importar Razones desde CSV</DialogTitle>
-                          <DialogDescription>
-                              Selecciona el archivo, el destino y el modo de importación.
+                           <DialogDescription>
+                              Los datos se importarán al almacenamiento local y se sincronizarán con la nube la próxima vez que presiones "Sincronizar".
                           </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
@@ -282,25 +276,6 @@ export default function ReasonsPage() {
                               <Label htmlFor="csv-file">Archivo CSV</Label>
                               <Input id="csv-file" type="file" accept=".csv" onChange={handleFileSelected} ref={importFileInputRef} />
                               {importFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {importFile.name}</p>}
-                          </div>
-                          <div>
-                              <Label>Destino de Importación</Label>
-                              <RadioGroup value={importDestination} onValueChange={(v) => setImportDestination(v as 'local' | 'cloud')} className="mt-2 grid grid-cols-2 gap-4">
-                                  <div>
-                                      <RadioGroupItem value="local" id="local" className="peer sr-only" />
-                                      <Label htmlFor="local" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                          <HardDrive className="mb-3 h-6 w-6" />
-                                          Local
-                                      </Label>
-                                  </div>
-                                  <div>
-                                      <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
-                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
-                                          <Cloud className="mb-3 h-6 w-6" />
-                                          Nube
-                                      </Label>
-                                  </div>
-                              </RadioGroup>
                           </div>
                           <div>
                              <Label>Modo de Importación</Label>

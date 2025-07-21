@@ -16,30 +16,30 @@ interface AppContextType {
   loading: boolean;
   error: Error | null;
   syncWithCloud: () => Promise<void>;
-  addFinancialRecord: (record: Omit<FinancialRecord, 'id' | 'userId'>) => Promise<void>;
-  updateFinancialRecord: (id: string, record: Partial<Omit<FinancialRecord, 'id' | 'userId'>>) => Promise<void>;
+  addFinancialRecord: (record: Omit<FinancialRecord, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateFinancialRecord: (id: string, record: Partial<Omit<FinancialRecord, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
   deleteFinancialRecord: (id: string) => Promise<void>;
   addIntegrante: (nombre: string, isProtected?: boolean) => Promise<void>;
   updateIntegrante: (id: string, nombre: string) => Promise<void>;
   deleteIntegrante: (id: string) => Promise<void>;
   addRazon: (descripcion: string, isQuickReason?: boolean, isProtected?: boolean) => Promise<void>;
-  updateRazon: (id: string, updates: Partial<Omit<Razon, 'id' | 'userId'>>) => Promise<void>;
+  updateRazon: (id: string, updates: Partial<Omit<Razon, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
   deleteRazon: (id: string) => Promise<void>;
-  importIntegrantes: (integrantes: Omit<Integrante, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => Promise<void>;
-  importRazones: (razones: Omit<Razon, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => Promise<void>;
-  importFinancialRecords: (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => Promise<void>;
+  importRazonesLocal: (razones: Omit<Razon, 'id'| 'userId' | 'createdAt' | 'updatedAt'>[], mode: 'add' | 'replace') => Promise<void>;
+  importIntegrantesLocal: (integrantes: Omit<Integrante, 'id'| 'userId' | 'createdAt' | 'updatedAt'>[], mode: 'add' | 'replace') => Promise<void>;
+  importFinancialRecordsLocal: (records: Omit<FinancialRecord, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[], mode: 'add' | 'replace') => Promise<void>;
 }
 
 type PendingOperation = 
-  | { type: 'addFinancialRecord', payload: Omit<FinancialRecord, 'id' | 'userId'> }
-  | { type: 'updateFinancialRecord', payload: { id: string, updates: Partial<Omit<FinancialRecord, 'id' | 'userId'>> } }
-  | { type: 'deleteFinancialRecord', payload: { id: string } }
-  | { type: 'addIntegrante', payload: { nombre: string, isProtected?: boolean } }
-  | { type: 'updateIntegrante', payload: { id: string, nombre: string } }
-  | { type: 'deleteIntegrante', payload: { id: string } }
-  | { type: 'addRazon', payload: { descripcion: string, isQuickReason?: boolean, isProtected?: boolean } }
-  | { type: 'updateRazon', payload: { id: string, updates: Partial<Omit<Razon, 'id' | 'userId'>> } }
-  | { type: 'deleteRazon', payload: { id: string } };
+  | { type: 'add', collection: 'financialRecords', payload: FinancialRecord }
+  | { type: 'update', collection: 'financialRecords', payload: { id: string, updates: Partial<FinancialRecord> } }
+  | { type: 'delete', collection: 'financialRecords', payload: { id: string } }
+  | { type: 'add', collection: 'integrantes', payload: Integrante }
+  | { type: 'update', collection: 'integrantes', payload: { id: string, updates: Partial<Integrante> } }
+  | { type: 'delete', collection: 'integrantes', payload: { id: string } }
+  | { type: 'add', collection: 'razones', payload: Razon }
+  | { type: 'update', collection: 'razones', payload: { id: string, updates: Partial<Razon> } }
+  | { type: 'delete', collection: 'razones', payload: { id: string } };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -74,7 +74,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   
   useEffect(() => {
-    // This effect ensures that on initial load, the state is read from localStorage and then we stop loading.
     setIntegrantes(getFromLocalStorage('integrantes', []));
     setRazones(getFromLocalStorage('razones', []));
     setFinancialRecords(getFromLocalStorage('financialRecords', []));
@@ -93,60 +92,74 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const syncWithCloud = async () => {
     if (!isFirebaseConfigured) {
-      toast({
-        variant: 'destructive',
-        title: 'Error de Configuración',
-        description: 'Firebase no está configurado. No se puede sincronizar.',
-      });
-      return;
+        toast({
+            variant: 'destructive',
+            title: 'Firebase no configurado',
+            description: 'No se puede sincronizar. Por favor, configura tus credenciales de Firebase.',
+        });
+        return;
     }
     setLoading(true);
     try {
-      // 1. Push local changes to the cloud
-      const opsToSync = [...pendingOps];
-      if (opsToSync.length > 0) {
-        console.log(`Enviando ${opsToSync.length} operaciones pendientes a la nube...`);
-        for (const op of opsToSync) {
-          // This assumes API functions handle the actual Firestore logic
-          switch (op.type) {
-            case 'addFinancialRecord': await api.addFinancialRecord(op.payload, DEFAULT_USER_ID); break;
-            case 'updateFinancialRecord': await api.updateFinancialRecord(op.payload.id, op.payload.updates); break;
-            case 'deleteFinancialRecord': await api.deleteFinancialRecord(op.payload.id); break;
-            case 'addIntegrante': await api.addIntegrante(op.payload.nombre, op.payload.isProtected, DEFAULT_USER_ID); break;
-            case 'updateIntegrante': await api.updateIntegrante(op.payload.id, op.payload.nombre); break;
-            case 'deleteIntegrante': await api.deleteIntegrante(op.payload.id); break;
-            case 'addRazon': await api.addRazon(op.payload.descripcion, op.payload.isProtected, op.payload.isQuickReason, DEFAULT_USER_ID); break;
-            case 'updateRazon': await api.updateRazon(op.payload.id, op.payload.updates); break;
-            case 'deleteRazon': await api.deleteRazon(op.payload.id); break;
-          }
+        const lastSyncTimestamp = getFromLocalStorage<number | null>('lastSyncTimestamp', null);
+        
+        // 1. PUSH local changes to cloud
+        const opsToSync = [...pendingOps];
+        if (opsToSync.length > 0) {
+            console.log(`Enviando ${opsToSync.length} operaciones pendientes a la nube...`);
+            await api.batchProcess(opsToSync);
+            setPendingOps([]);
+            console.log("Operaciones pendientes sincronizadas.");
         }
-        // Clear pending operations after successful sync
-        setPendingOps([]);
-        console.log("Operaciones pendientes sincronizadas.");
-      }
 
-      // 2. Pull all data from the cloud and overwrite local storage
-      console.log("Descargando datos actualizados de la nube...");
-      const [cloudIntegrantes, cloudRazones, cloudRecords] = await Promise.all([
-        api.getData('integrantes', DEFAULT_USER_ID) as Promise<Integrante[]>,
-        api.getData('razones', DEFAULT_USER_ID) as Promise<Razon[]>,
-        api.getData('financialRecords', DEFAULT_USER_ID) as Promise<FinancialRecord[]>,
-      ]);
-      
-      setIntegrantes(cloudIntegrantes);
-      setRazones(cloudRazones);
-      setFinancialRecords(cloudRecords);
+        // 2. PULL changes from cloud
+        console.log("Descargando cambios desde la nube...");
+        const {
+            integrantes: cloudIntegrantes,
+            razones: cloudRazones,
+            financialRecords: cloudRecords,
+        } = await api.getChangesSince(lastSyncTimestamp, DEFAULT_USER_ID);
+        
+        // 3. MERGE cloud changes into local state
+        setIntegrantes(prev => mergeData(prev, cloudIntegrantes));
+        setRazones(prev => mergeData(prev, cloudRazones));
+        setFinancialRecords(prev => mergeData(prev, cloudRecords));
+        
+        console.log("Fusión de datos completada.");
 
-      console.log("Sincronización con la nube completada.");
+        // 4. Update sync timestamp
+        setToLocalStorage('lastSyncTimestamp', new Date().getTime());
+
+        toast({
+          title: 'Sincronización Completa',
+          description: 'Tus datos locales están actualizados.',
+        });
 
     } catch (e) {
       const err = e instanceof Error ? e : new Error("Error desconocido durante la sincronización");
       console.error("Error de sincronización:", err);
       setError(err);
-      throw err;
+      toast({
+          variant: 'destructive',
+          title: 'Error de Sincronización',
+          description: err.message,
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  const mergeData = <T extends { id: string; updatedAt?: number; isDeleted?: boolean }>(
+    localData: T[],
+    cloudChanges: T[]
+  ): T[] => {
+      const localDataMap = new Map(localData.map(item => [item.id, item]));
+
+      cloudChanges.forEach(cloudItem => {
+          localDataMap.set(cloudItem.id, cloudItem);
+      });
+      
+      return Array.from(localDataMap.values()).filter(item => !item.isDeleted);
   };
 
 
@@ -163,68 +176,114 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return dates;
   }, [financialRecords]);
 
-  // --- CRUD Functions now operate on local state first ---
+  // --- CRUD Functions ---
 
-  const addFinancialRecord = async (record: Omit<FinancialRecord, 'id' | 'userId'>) => {
+  const addFinancialRecord = async (record: Omit<FinancialRecord, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     let monto = record.monto;
     if ((record.movimiento === 'GASTOS' || record.movimiento === 'INVERSION') && monto > 0) monto = -monto;
     if (record.movimiento === 'INGRESOS' && monto < 0) monto = Math.abs(monto);
-    const finalRecord = { ...record, monto };
-
-    const newRecord: FinancialRecord = { ...finalRecord, id: uuidv4(), userId: DEFAULT_USER_ID };
+    
+    const now = new Date().getTime();
+    const newRecord: FinancialRecord = { 
+        ...record, 
+        monto,
+        id: uuidv4(), 
+        userId: DEFAULT_USER_ID,
+        createdAt: now,
+        updatedAt: now,
+    };
+    
     setFinancialRecords(prev => [...prev, newRecord]);
-    addPendingOp({ type: 'addFinancialRecord', payload: finalRecord });
+    addPendingOp({ type: 'add', collection: 'financialRecords', payload: newRecord });
   };
   
   const updateFinancialRecord = async (id: string, updates: Partial<Omit<FinancialRecord, 'id' | 'userId'>>) => {
-      setFinancialRecords(prev => prev.map(r => r.id === id ? { ...r, ...updates, fecha: updates.fecha || r.fecha } : r));
-      addPendingOp({ type: 'updateFinancialRecord', payload: { id, updates } });
+      const now = new Date().getTime();
+      const finalUpdates = {...updates, updatedAt: now };
+      setFinancialRecords(prev => prev.map(r => r.id === id ? { ...r, ...finalUpdates, fecha: updates.fecha || r.fecha } : r));
+      addPendingOp({ type: 'update', collection: 'financialRecords', payload: { id, updates: finalUpdates } });
   };
 
   const deleteFinancialRecord = async (id: string) => {
       setFinancialRecords(prev => prev.filter(r => r.id !== id));
-      addPendingOp({ type: 'deleteFinancialRecord', payload: { id } });
+      addPendingOp({ type: 'delete', collection: 'financialRecords', payload: { id } });
   };
   
   const addIntegrante = async (nombre: string, isProtected = false) => {
-    const newIntegrante: Integrante = { id: uuidv4(), nombre: nombre.toUpperCase(), isProtected, userId: DEFAULT_USER_ID };
+    const now = new Date().getTime();
+    const newIntegrante: Integrante = { 
+        id: uuidv4(), 
+        nombre: nombre.toUpperCase(), 
+        isProtected, 
+        userId: DEFAULT_USER_ID,
+        createdAt: now,
+        updatedAt: now,
+    };
     setIntegrantes(prev => [...prev, newIntegrante]);
-    addPendingOp({ type: 'addIntegrante', payload: { nombre, isProtected } });
+    addPendingOp({ type: 'add', collection: 'integrantes', payload: newIntegrante });
   };
 
   const updateIntegrante = async (id: string, nombre: string) => {
-      setIntegrantes(prev => prev.map(i => i.id === id ? { ...i, nombre: nombre.toUpperCase() } : i));
-      addPendingOp({ type: 'updateIntegrante', payload: { id, nombre } });
+      const updates = { nombre: nombre.toUpperCase(), updatedAt: new Date().getTime() };
+      setIntegrantes(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+      addPendingOp({ type: 'update', collection: 'integrantes', payload: { id, updates } });
   };
 
   const deleteIntegrante = async (id: string) => {
       setIntegrantes(prev => prev.filter(i => i.id !== id));
-      addPendingOp({ type: 'deleteIntegrante', payload: { id } });
+      addPendingOp({ type: 'delete', collection: 'integrantes', payload: { id } });
   };
 
   const addRazon = async (descripcion: string, isQuickReason = false, isProtected = false) => {
-      const newRazon: Razon = { id: uuidv4(), descripcion: descripcion.toUpperCase(), isQuickReason, isProtected, userId: DEFAULT_USER_ID };
+      const now = new Date().getTime();
+      const newRazon: Razon = { 
+          id: uuidv4(), 
+          descripcion: descripcion.toUpperCase(), 
+          isQuickReason, 
+          isProtected, 
+          userId: DEFAULT_USER_ID,
+          createdAt: now,
+          updatedAt: now,
+      };
       setRazones(prev => [...prev, newRazon]);
-      addPendingOp({ type: 'addRazon', payload: { descripcion, isQuickReason, isProtected } });
+      addPendingOp({ type: 'add', collection: 'razones', payload: newRazon });
   };
 
   const updateRazon = async (id: string, updates: Partial<Omit<Razon, 'id' | 'userId'>>) => {
-      setRazones(prev => prev.map(r => r.id === id ? { ...r, ...updates, descripcion: (updates.descripcion || r.descripcion).toUpperCase() } : r));
-      addPendingOp({ type: 'updateRazon', payload: { id, updates } });
+      const now = new Date().getTime();
+      const finalUpdates: Partial<Razon> = { 
+          ...updates,
+          updatedAt: now,
+          descripcion: (updates.descripcion || '').toUpperCase()
+      };
+      if (updates.descripcion) {
+        finalUpdates.descripcion = updates.descripcion.toUpperCase();
+      }
+
+      setRazones(prev => prev.map(r => r.id === id ? { ...r, ...finalUpdates } as Razon : r));
+      addPendingOp({ type: 'update', collection: 'razones', payload: { id, updates: finalUpdates } });
   };
   
   const deleteRazon = async (id: string) => {
       setRazones(prev => prev.filter(r => r.id !== id));
-      addPendingOp({ type: 'deleteRazon', payload: { id } });
+      addPendingOp({ type: 'delete', collection: 'razones', payload: { id } });
   };
 
-  const importIntegrantesLocal = async (integrantesToImport: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+  const importIntegrantesLocal = async (integrantesToImport: Omit<Integrante, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[], mode: 'add' | 'replace') => {
       let finalIntegrantes = [...integrantes];
       if (mode === 'replace') {
           finalIntegrantes = finalIntegrantes.filter(i => i.isProtected);
       }
 
-      const newIntegrantes = integrantesToImport.map(i => ({...i, nombre: i.nombre.toUpperCase(), id: uuidv4(), userId: DEFAULT_USER_ID }));
+      const now = new Date().getTime();
+      const newIntegrantes = integrantesToImport.map(i => ({
+        ...i, 
+        nombre: i.nombre.toUpperCase(), 
+        id: uuidv4(), 
+        userId: DEFAULT_USER_ID,
+        createdAt: now,
+        updatedAt: now,
+      }));
       
       if (mode === 'add') {
           const existingNames = new Set(finalIntegrantes.map(i => i.nombre.toLowerCase()));
@@ -236,26 +295,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setIntegrantes(finalIntegrantes);
   };
   
-  const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => {
-    if (destination === 'local') {
-      return importIntegrantesLocal(integrantesToImport, mode);
-    }
-    // Cloud
-    if (!isFirebaseConfigured) {
-      toast({variant: 'destructive', title: 'Error', description: 'Firebase no está configurado para importación en la nube.'});
-      throw new Error("Firebase not configured for cloud import");
-    }
-    await api.importIntegrantes(integrantesToImport, mode, DEFAULT_USER_ID);
-    await syncWithCloud(); // Refresh local data
-  };
-
-  const importRazonesLocal = async (razonesToImport: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+  const importRazonesLocal = async (razonesToImport: Omit<Razon, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[], mode: 'add' | 'replace') => {
       let finalRazones = [...razones];
       if (mode === 'replace') {
           finalRazones = finalRazones.filter(r => r.isProtected);
       }
-
-      const newRazones = razonesToImport.map(r => ({...r, descripcion: r.descripcion.toUpperCase(), id: uuidv4(), userId: DEFAULT_USER_ID}));
+      
+      const now = new Date().getTime();
+      const newRazones = razonesToImport.map(r => ({
+          ...r, 
+          descripcion: r.descripcion.toUpperCase(), 
+          id: uuidv4(), 
+          userId: DEFAULT_USER_ID,
+          createdAt: now,
+          updatedAt: now,
+        }));
       
       if (mode === 'add') {
           const existingDescriptions = new Set(finalRazones.map(r => r.descripcion.toLowerCase()));
@@ -267,26 +321,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setRazones(finalRazones);
   };
 
-  const importRazones = async (razonesToImport: Omit<Razon, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => {
-    if (destination === 'local') {
-      return importRazonesLocal(razonesToImport, mode);
-    }
-    // Cloud
-    if (!isFirebaseConfigured) {
-      toast({variant: 'destructive', title: 'Error', description: 'Firebase no está configurado para importación en la nube.'});
-      throw new Error("Firebase not configured for cloud import");
-    }
-    await api.importRazones(razonesToImport, mode, DEFAULT_USER_ID);
-    await syncWithCloud(); // Refresh local data
-  }
-
-   const importFinancialRecordsLocal = async (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
+   const importFinancialRecordsLocal = async (records: Omit<FinancialRecord, 'id' | 'userId' | 'createdAt' | 'updatedAt'>[], mode: 'add' | 'replace') => {
       let finalRecords = [...financialRecords];
       if (mode === 'replace') {
           finalRecords = [];
       }
       
-      const recordsWithIds = records.map(r => ({ ...r, id: uuidv4(), userId: DEFAULT_USER_ID }));
+      const now = new Date().getTime();
+      const recordsWithIds = records.map(r => ({ 
+          ...r, 
+          id: uuidv4(), 
+          userId: DEFAULT_USER_ID,
+          createdAt: now,
+          updatedAt: now,
+      }));
 
       if (mode === 'add') {
           finalRecords.push(...recordsWithIds);
@@ -295,19 +343,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setFinancialRecords(finalRecords);
   };
-  
-  const importFinancialRecords = async (records: Omit<FinancialRecord, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => {
-    if (destination === 'local') {
-      return importFinancialRecordsLocal(records, mode);
-    }
-    // Cloud
-    if (!isFirebaseConfigured) {
-      toast({variant: 'destructive', title: 'Error', description: 'Firebase no está configurado para importación en la nube.'});
-      throw new Error("Firebase not configured for cloud import");
-    }
-    await api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
-    await syncWithCloud(); // Refresh local data
-  }
 
   const value: AppContextType = {
     integrantes,
@@ -326,9 +361,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addRazon,
     updateRazon,
     deleteRazon,
-    importIntegrantes,
-    importRazones,
-    importFinancialRecords,
+    importIntegrantesLocal,
+    importRazonesLocal,
+    importFinancialRecordsLocal,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
