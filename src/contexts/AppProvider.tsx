@@ -3,9 +3,10 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import type { FinancialRecord, Integrante, Razon } from '@/types';
 import * as api from '@/lib/data';
-import { db, isFirebaseConfigured } from '@/lib/firebase';
+import { isFirebaseConfigured } from '@/lib/firebase';
 import { parse, isValid, startOfDay } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
+import { useToast } from '@/hooks/use-toast';
 
 interface AppContextType {
   integrantes: Integrante[];
@@ -24,9 +25,9 @@ interface AppContextType {
   addRazon: (descripcion: string, isQuickReason?: boolean, isProtected?: boolean) => Promise<void>;
   updateRazon: (id: string, updates: Partial<Omit<Razon, 'id' | 'userId'>>) => Promise<void>;
   deleteRazon: (id: string) => Promise<void>;
-  importIntegrantesLocal: (integrantes: Omit<Integrante, 'id'| 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
-  importRazonesLocal: (razones: Omit<Razon, 'id'| 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
-  importFinancialRecordsLocal: (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => Promise<void>;
+  importIntegrantes: (integrantes: Omit<Integrante, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => Promise<void>;
+  importRazones: (razones: Omit<Razon, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => Promise<void>;
+  importFinancialRecords: (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => Promise<void>;
 }
 
 type PendingOperation = 
@@ -70,6 +71,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const { toast } = useToast();
   
   useEffect(() => {
     // This effect ensures that on initial load, the state is read from localStorage and then we stop loading.
@@ -91,7 +93,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const syncWithCloud = async () => {
     if (!isFirebaseConfigured) {
-      throw new Error("Firebase no está configurado. No se puede sincronizar.");
+      toast({
+        variant: 'destructive',
+        title: 'Error de Configuración',
+        description: 'Firebase no está configurado. No se puede sincronizar.',
+      });
+      return;
     }
     setLoading(true);
     try {
@@ -228,6 +235,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setIntegrantes(finalIntegrantes);
   };
+  
+  const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => {
+    if (destination === 'local') {
+      return importIntegrantesLocal(integrantesToImport, mode);
+    }
+    // Cloud
+    if (!isFirebaseConfigured) {
+      toast({variant: 'destructive', title: 'Error', description: 'Firebase no está configurado para importación en la nube.'});
+      throw new Error("Firebase not configured for cloud import");
+    }
+    await api.importIntegrantes(integrantesToImport, mode, DEFAULT_USER_ID);
+    await syncWithCloud(); // Refresh local data
+  };
 
   const importRazonesLocal = async (razonesToImport: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
       let finalRazones = [...razones];
@@ -247,6 +267,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setRazones(finalRazones);
   };
 
+  const importRazones = async (razonesToImport: Omit<Razon, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => {
+    if (destination === 'local') {
+      return importRazonesLocal(razonesToImport, mode);
+    }
+    // Cloud
+    if (!isFirebaseConfigured) {
+      toast({variant: 'destructive', title: 'Error', description: 'Firebase no está configurado para importación en la nube.'});
+      throw new Error("Firebase not configured for cloud import");
+    }
+    await api.importRazones(razonesToImport, mode, DEFAULT_USER_ID);
+    await syncWithCloud(); // Refresh local data
+  }
+
    const importFinancialRecordsLocal = async (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
       let finalRecords = [...financialRecords];
       if (mode === 'replace') {
@@ -262,6 +295,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setFinancialRecords(finalRecords);
   };
+  
+  const importFinancialRecords = async (records: Omit<FinancialRecord, 'id'| 'userId'>[], mode: 'add' | 'replace', destination: 'local' | 'cloud') => {
+    if (destination === 'local') {
+      return importFinancialRecordsLocal(records, mode);
+    }
+    // Cloud
+    if (!isFirebaseConfigured) {
+      toast({variant: 'destructive', title: 'Error', description: 'Firebase no está configurado para importación en la nube.'});
+      throw new Error("Firebase not configured for cloud import");
+    }
+    await api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
+    await syncWithCloud(); // Refresh local data
+  }
 
   const value: AppContextType = {
     integrantes,
@@ -280,9 +326,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     addRazon,
     updateRazon,
     deleteRazon,
-    importIntegrantesLocal,
-    importRazonesLocal,
-    importFinancialRecordsLocal,
+    importIntegrantes,
+    importRazones,
+    importFinancialRecords,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

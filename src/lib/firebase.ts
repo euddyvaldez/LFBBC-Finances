@@ -27,13 +27,13 @@ const checkFirebaseConfig = () => {
     );
 };
 
-export const isFirebaseConfigured = true;
+export const isFirebaseConfigured = checkFirebaseConfig();
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let auth: Auth | null = null;
 
-if (checkFirebaseConfig()) {
+if (isFirebaseConfigured) {
   try {
       app = getApps().length ? getApp() : initializeApp(firebaseConfig);
       db = getFirestore(app);
