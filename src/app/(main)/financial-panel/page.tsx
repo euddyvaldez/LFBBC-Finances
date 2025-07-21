@@ -236,16 +236,16 @@ export default function FinancialPanelPage() {
           <CardDescription>Filtra y visualiza tus movimientos financieros.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-start">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
             <div className='flex flex-col gap-4 w-full md:w-auto'>
-                <div className="flex bg-muted p-1 rounded-lg w-full sm:w-[320px]">
-                <Button variant={filterMode === 'predefined' ? 'default' : 'ghost'} onClick={() => setFilterMode('predefined')} className="flex-1 text-xs sm:text-sm">Períodos Predefinidos</Button>
-                <Button variant={filterMode === 'custom' ? 'default' : 'ghost'} onClick={() => setFilterMode('custom')} className="flex-1 text-xs sm:text-sm">Rango Personalizado</Button>
+                <div className="flex bg-muted p-1 rounded-lg w-full max-w-[320px]">
+                  <Button variant={filterMode === 'predefined' ? 'default' : 'ghost'} onClick={() => setFilterMode('predefined')} className="flex-1 text-xs sm:text-sm">Predefinidos</Button>
+                  <Button variant={filterMode === 'custom' ? 'default' : 'ghost'} onClick={() => setFilterMode('custom')} className="flex-1 text-xs sm:text-sm">Personalizado</Button>
                 </div>
                 
                 {filterMode === 'predefined' ? (
-                <div className="flex flex-col gap-4">
-                    <div className="flex bg-muted p-1 rounded-lg w-full sm:w-[320px]">
+                <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex bg-muted p-1 rounded-lg w-full max-w-[320px]">
                       <Button variant={viewType === 'daily' ? 'default' : 'ghost'} onClick={() => setViewType('daily')} className="flex-1 text-xs sm:text-sm">Diaria</Button>
                       <Button variant={viewType === 'monthly' ? 'default' : 'ghost'} onClick={() => setViewType('monthly')} className="flex-1 text-xs sm:text-sm">Mensual</Button>
                       <Button variant={viewType === 'yearly' ? 'default' : 'ghost'} onClick={() => setViewType('yearly')} className="flex-1 text-xs sm:text-sm">Anual</Button>
@@ -280,7 +280,7 @@ export default function FinancialPanelPage() {
                       <DatePicker date={customStartDate} setDate={setCustomStartDate} />
                       <DatePicker date={customEndDate} setDate={setCustomEndDate} />
                   </div>
-                  <div className="flex bg-muted p-1 rounded-lg w-full sm:w-[320px]">
+                  <div className="flex bg-muted p-1 rounded-lg w-full max-w-[320px]">
                       <Button variant={customViewType === 'daily' ? 'default' : 'ghost'} onClick={() => setCustomViewType('daily')} className="flex-1 text-xs sm:text-sm">Diaria</Button>
                       <Button variant={customViewType === 'monthly' ? 'default' : 'ghost'} onClick={() => setCustomViewType('monthly')} className="flex-1 text-xs sm:text-sm">Mensual</Button>
                       <Button variant={customViewType === 'yearly' ? 'default' : 'ghost'} onClick={() => setCustomViewType('yearly')} className="flex-1 text-xs sm:text-sm">Anual</Button>
@@ -289,7 +289,7 @@ export default function FinancialPanelPage() {
                 )}
             </div>
             
-            <div className="flex justify-center bg-muted p-1 rounded-lg">
+            <div className="flex justify-center bg-muted p-1 rounded-lg w-full max-w-[320px] md:w-auto">
                 <Button variant={chartType === 'bar' ? 'default' : 'ghost'} onClick={() => setChartType('bar')} className="flex-1">Barra</Button>
                 <Button variant={chartType === 'line' ? 'default' : 'ghost'} onClick={() => setChartType('line')} className="flex-1">Línea</Button>
                 <Button variant={chartType === 'pie' ? 'default' : 'ghost'} onClick={() => setChartType('pie')} className="flex-1">Pastel</Button>

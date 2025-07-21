@@ -236,6 +236,7 @@ export default function ReasonsPage() {
             value={newRazonDesc}
             onChange={(e) => setNewRazonDesc(e.target.value)}
             onKeyUp={(e) => e.key === 'Enter' && handleAdd()}
+            className="w-full"
           />
           <Button onClick={handleAdd}>Agregar Razón</Button>
         </CardContent>
@@ -246,7 +247,7 @@ export default function ReasonsPage() {
           <CardTitle>Lista de Razones</CardTitle>
           <CardDescription>Busca, edita y gestiona las razones de los movimientos.</CardDescription>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4">
-            <div className="flex-1 space-y-2">
+            <div className="flex flex-col gap-2 flex-1">
                 <Input
                     placeholder="Buscar razón..."
                     value={searchTerm}
@@ -265,7 +266,7 @@ export default function ReasonsPage() {
                     </SelectContent>
                 </Select>
             </div>
-             <div className="grid grid-cols-2 sm:flex sm:flex-col sm:w-auto gap-2">
+             <div className="grid grid-cols-2 gap-2 sm:flex sm:w-auto">
                 <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
                   <DialogTrigger asChild>
                       <Button variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4"/>Importar</Button>

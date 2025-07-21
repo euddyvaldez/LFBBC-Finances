@@ -146,7 +146,7 @@ export default function QuickRecordPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
                 name="fecha"
@@ -249,7 +249,7 @@ export default function QuickRecordPage() {
                 control={form.control}
                 name="descripcion"
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
+                  <FormItem className="md:col-span-2">
                     <FormLabel>Descripción (Opcional)</FormLabel>
                       <Autocomplete
                         options={uniqueDescriptionOptions}
@@ -270,7 +270,7 @@ export default function QuickRecordPage() {
                 control={form.control}
                 name="movimiento"
                 render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
+                  <FormItem className="md:col-span-2">
                     <FormLabel>Movimiento</FormLabel>
                     <FormControl>
                         <div className='grid grid-cols-3 gap-2'>
