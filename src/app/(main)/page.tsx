@@ -214,20 +214,6 @@ export default function DashboardPage() {
             {isSyncing ? 'Sincronizando...' : 'Sincronizar con la Nube'}
         </Button>
       </div>
-      
-      {!isFirebaseConfigured && (
-          <Card className="bg-yellow-50 border-yellow-300 dark:bg-yellow-950 dark:border-yellow-800">
-              <CardContent className="p-4 flex items-center gap-4">
-                  <AlertCircle className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
-                  <div>
-                      <p className="font-bold text-yellow-800 dark:text-yellow-200">Modo Local Activado</p>
-                      <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                          Firebase no está configurado. Todos los datos se guardan solo en este dispositivo.
-                      </p>
-                  </div>
-              </CardContent>
-          </Card>
-      )}
 
       <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Main Balance Card */}
