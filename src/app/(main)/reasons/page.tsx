@@ -263,7 +263,7 @@ export default function ReasonsPage() {
                     <SelectItem value="id-desc">ID (Descendente)</SelectItem>
                 </SelectContent>
             </Select>
-             <div className="flex gap-2">
+             <div className="flex flex-col sm:flex-row gap-2">
                 <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
                   <DialogTrigger asChild>
                       <Button variant="outline" className="w-full md:w-auto"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
@@ -384,5 +384,3 @@ export default function ReasonsPage() {
     </div>
   );
 }
-
-    
