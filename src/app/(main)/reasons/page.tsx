@@ -245,28 +245,28 @@ export default function ReasonsPage() {
         <CardHeader>
           <CardTitle>Lista de Razones</CardTitle>
           <CardDescription>Busca, edita y gestiona las razones de los movimientos.</CardDescription>
-           <div className="flex flex-col md:flex-row gap-2 pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 flex-wrap">
             <Input
                 placeholder="Buscar razón..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="flex-1"
+                className="w-full sm:w-auto sm:flex-1"
             />
-             <Select value={sortOrder} onValueChange={setSortOrder}>
-                <SelectTrigger className="w-full md:w-[220px]">
-                    <SelectValue placeholder="Ordenar por..." />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="alpha-asc">Alfabético (A-Z)</SelectItem>
-                    <SelectItem value="alpha-desc">Alfabético (Z-A)</SelectItem>
-                    <SelectItem value="id-asc">ID (Ascendente)</SelectItem>
-                    <SelectItem value="id-desc">ID (Descendente)</SelectItem>
-                </SelectContent>
-            </Select>
-             <div className="grid grid-cols-2 md:flex md:flex-row gap-2">
+             <div className="flex gap-2 flex-wrap">
+                <Select value={sortOrder} onValueChange={setSortOrder}>
+                    <SelectTrigger className="flex-1 min-w-[150px]">
+                        <SelectValue placeholder="Ordenar por..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="alpha-asc">Alfabético (A-Z)</SelectItem>
+                        <SelectItem value="alpha-desc">Alfabético (Z-A)</SelectItem>
+                        <SelectItem value="id-asc">ID (Ascendente)</SelectItem>
+                        <SelectItem value="id-desc">ID (Descendente)</SelectItem>
+                    </SelectContent>
+                </Select>
                 <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
                   <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
+                      <Button variant="outline" className="flex-1"><Upload className="mr-2 h-4 w-4"/>Importar</Button>
                   </DialogTrigger>
                   <DialogContent>
                       <DialogHeader>
@@ -320,7 +320,7 @@ export default function ReasonsPage() {
                       </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <Button onClick={exportToCSV} variant="outline" className="w-full"><Download className="mr-2 h-4 w-4"/>Exportar CSV</Button>
+                <Button onClick={exportToCSV} variant="outline" className="flex-1"><Download className="mr-2 h-4 w-4"/>Exportar</Button>
             </div>
           </div>
         </CardHeader>
@@ -384,5 +384,3 @@ export default function ReasonsPage() {
     </div>
   );
 }
-
-  

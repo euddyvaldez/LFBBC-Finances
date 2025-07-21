@@ -230,84 +230,84 @@ export default function MembersPage() {
         <CardHeader>
           <CardTitle>Lista de Integrantes</CardTitle>
           <CardDescription>Busca, edita y elimina integrantes del equipo.</CardDescription>
-          <div className="flex flex-col md:flex-row gap-2 pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 flex-wrap">
             <Input
                 placeholder="Buscar integrante..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="flex-1"
+                className="w-full sm:w-auto sm:flex-1"
             />
-             <Select value={sortOrder} onValueChange={setSortOrder}>
-                <SelectTrigger className="w-full md:w-[220px]">
-                    <SelectValue placeholder="Ordenar por..." />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="alpha-asc">Alfabético (A-Z)</SelectItem>
-                    <SelectItem value="alpha-desc">Alfabético (Z-A)</SelectItem>
-                    <SelectItem value="id-asc">ID (Ascendente)</SelectItem>
-                    <SelectItem value="id-desc">ID (Descendente)</SelectItem>
-                </SelectContent>
-            </Select>
-            <div className="flex gap-2">
-              <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
-                <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full md:w-auto"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Importar Integrantes desde CSV</DialogTitle>
-                        <DialogDescription>
-                            Selecciona el archivo, el destino y el modo de importación.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <div className="grid w-full max-w-sm items-center gap-1.5">
-                            <Label htmlFor="csv-file">Archivo CSV</Label>
-                            <Input id="csv-file" type="file" accept=".csv" onChange={handleFileSelected} ref={importFileInputRef} />
-                            {importFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {importFile.name}</p>}
-                        </div>
+            <div className="flex gap-2 flex-wrap">
+                <Select value={sortOrder} onValueChange={setSortOrder}>
+                    <SelectTrigger className="flex-1 min-w-[150px]">
+                        <SelectValue placeholder="Ordenar por..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="alpha-asc">Alfabético (A-Z)</SelectItem>
+                        <SelectItem value="alpha-desc">Alfabético (Z-A)</SelectItem>
+                        <SelectItem value="id-asc">ID (Ascendente)</SelectItem>
+                        <SelectItem value="id-desc">ID (Descendente)</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                  <DialogTrigger asChild>
+                      <Button variant="outline" className="flex-1"><Upload className="mr-2 h-4 w-4"/>Importar</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                      <DialogHeader>
+                          <DialogTitle>Importar Integrantes desde CSV</DialogTitle>
+                          <DialogDescription>
+                              Selecciona el archivo, el destino y el modo de importación.
+                          </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                          <div className="grid w-full max-w-sm items-center gap-1.5">
+                              <Label htmlFor="csv-file">Archivo CSV</Label>
+                              <Input id="csv-file" type="file" accept=".csv" onChange={handleFileSelected} ref={importFileInputRef} />
+                              {importFile && <p className="text-sm text-muted-foreground">Archivo seleccionado: {importFile.name}</p>}
+                          </div>
 
-                        <div>
-                            <Label>Destino de Importación</Label>
-                            <RadioGroup value={importDestination} onValueChange={(v) => setImportDestination(v as 'local' | 'cloud')} className="mt-2 grid grid-cols-2 gap-4">
-                                <div>
-                                    <RadioGroupItem value="local" id="local" className="peer sr-only" />
-                                    <Label htmlFor="local" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
-                                        <HardDrive className="mb-3 h-6 w-6" />
-                                        Local
-                                    </Label>
-                                </div>
-                                <div>
-                                    <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
-                                    <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
-                                        <Cloud className="mb-3 h-6 w-6" />
-                                        Nube
-                                    </Label>
-                                </div>
-                            </RadioGroup>
-                             {!isFirebaseConfigured && <p className="text-xs text-destructive mt-2">La importación a la nube está deshabilitada porque Firebase no está configurado.</p>}
-                        </div>
+                          <div>
+                              <Label>Destino de Importación</Label>
+                              <RadioGroup value={importDestination} onValueChange={(v) => setImportDestination(v as 'local' | 'cloud')} className="mt-2 grid grid-cols-2 gap-4">
+                                  <div>
+                                      <RadioGroupItem value="local" id="local" className="peer sr-only" />
+                                      <Label htmlFor="local" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                                          <HardDrive className="mb-3 h-6 w-6" />
+                                          Local
+                                      </Label>
+                                  </div>
+                                  <div>
+                                      <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" disabled={!isFirebaseConfigured} />
+                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                                          <Cloud className="mb-3 h-6 w-6" />
+                                          Nube
+                                      </Label>
+                                  </div>
+                              </RadioGroup>
+                               {!isFirebaseConfigured && <p className="text-xs text-destructive mt-2">La importación a la nube está deshabilitada porque Firebase no está configurado.</p>}
+                          </div>
 
-                        <div>
-                           <Label>Modo de Importación</Label>
-                           <Select value={importMode} onValueChange={(v) => setImportMode(v as 'add' | 'replace')}>
-                               <SelectTrigger className="mt-2">
-                                   <SelectValue />
-                               </SelectTrigger>
-                               <SelectContent>
-                                   <SelectItem value="add">Agregar a existentes</SelectItem>
-                                   <SelectItem value="replace">Reemplazar existentes (no protegidos)</SelectItem>
-                               </SelectContent>
-                           </Select>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={processImport} disabled={!importFile}>Importar</Button>
-                    </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <Button onClick={exportToCSV} variant="outline" className="w-full md:w-auto"><Download className="mr-2 h-4 w-4"/>Exportar CSV</Button>
+                          <div>
+                             <Label>Modo de Importación</Label>
+                             <Select value={importMode} onValueChange={(v) => setImportMode(v as 'add' | 'replace')}>
+                                 <SelectTrigger className="mt-2">
+                                     <SelectValue />
+                                 </SelectTrigger>
+                                 <SelectContent>
+                                     <SelectItem value="add">Agregar a existentes</SelectItem>
+                                     <SelectItem value="replace">Reemplazar existentes (no protegidos)</SelectItem>
+                                 </SelectContent>
+                             </Select>
+                          </div>
+                      </div>
+                      <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Cancelar</Button>
+                          <Button onClick={processImport} disabled={!importFile}>Importar</Button>
+                      </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Button onClick={exportToCSV} variant="outline" className="flex-1"><Download className="mr-2 h-4 w-4"/>Exportar</Button>
             </div>
           </div>
         </CardHeader>
@@ -358,5 +358,3 @@ export default function MembersPage() {
     </div>
   );
 }
-
-    

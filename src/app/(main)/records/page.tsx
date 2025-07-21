@@ -518,21 +518,23 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
         <CardHeader>
           <CardTitle>Historial de Registros</CardTitle>
           <CardDescription>Consulta y filtra todos los movimientos financieros.</CardDescription>
-          <div className="flex flex-col md:flex-row gap-2 pt-4">
-            <Select value={filterField} onValueChange={setFilterField}>
-              <SelectTrigger className="w-full md:w-[180px]"><SelectValue placeholder="Filtrar por..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="descripcion">Descripción</SelectItem>
-                <SelectItem value="integrante">Integrante</SelectItem>
-                <SelectItem value="razon">Razón</SelectItem>
-                <SelectItem value="fecha">Fecha (dd/MM/yyyy)</SelectItem>
-              </SelectContent>
-            </Select>
-            <Input placeholder="Buscar..." value={filter} onChange={(e) => setFilter(e.target.value)} className="flex-1"/>
-            <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 flex-wrap">
+            <div className="flex-1 flex flex-col min-w-[200px] sm:flex-row gap-2">
+                <Select value={filterField} onValueChange={setFilterField}>
+                  <SelectTrigger><SelectValue placeholder="Filtrar por..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="descripcion">Descripción</SelectItem>
+                    <SelectItem value="integrante">Integrante</SelectItem>
+                    <SelectItem value="razon">Razón</SelectItem>
+                    <SelectItem value="fecha">Fecha (dd/MM/yyyy)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input placeholder="Buscar..." value={filter} onChange={(e) => setFilter(e.target.value)} />
+            </div>
+            <div className="flex gap-2 flex-wrap">
               <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
                 <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full"><Upload className="mr-2 h-4 w-4"/>Importar CSV</Button>
+                    <Button variant="outline" className="flex-1"><Upload className="mr-2 h-4 w-4"/>Importar</Button>
                 </DialogTrigger>
                 <DialogContent>
                     <DialogHeader>
@@ -588,7 +590,7 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
                     </DialogFooter>
                 </DialogContent>
               </Dialog>
-              <Button onClick={exportToCSV} variant="outline" className="w-full"><Download className="mr-2 h-4 w-4"/>Exportar CSV</Button>
+              <Button onClick={exportToCSV} variant="outline" className="flex-1"><Download className="mr-2 h-4 w-4"/>Exportar</Button>
             </div>
           </div>
         </CardHeader>
@@ -678,5 +680,3 @@ export default function RecordsPage() {
         </div>
     );
 }
-
-    
