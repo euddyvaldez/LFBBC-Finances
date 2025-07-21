@@ -270,7 +270,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const importFinancialRecords = async (records: Omit<FinancialRecord, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-      if(!isFirebaseConfigured) throw new Error("Firebase not configured for cloud import.");
       return api.importFinancialRecords(records, mode, DEFAULT_USER_ID);
   };
   
@@ -291,7 +290,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-      if(!isFirebaseConfigured) throw new Error("Firebase not configured for cloud import.");
       return api.importIntegrantes(integrantesToImport, mode, DEFAULT_USER_ID);
   };
 
@@ -312,7 +310,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const importRazones = async (razonesToImport: Omit<Razon, 'id' | 'userId'>[], mode: 'add' | 'replace') => {
-      if(!isFirebaseConfigured) throw new Error("Firebase not configured for cloud import.");
       return api.importRazones(razonesToImport, mode, DEFAULT_USER_ID);
   };
 
@@ -366,5 +363,3 @@ export function useAppContext() {
   }
   return context;
 }
-
-    
