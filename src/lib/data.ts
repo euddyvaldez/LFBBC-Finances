@@ -40,10 +40,10 @@ export const importIntegrantes = async (integrantesToImport: Omit<Integrante, 'i
     });
   }
   
-  integrantesToImport.forEach(integrante => {
+  for (const integrante of integrantesToImport) {
     const newDocRef = doc(integrantesCol);
     batch.set(newDocRef, { ...integrante, nombre: integrante.nombre.toUpperCase(), userId });
-  });
+  }
 
   await batch.commit();
 };
@@ -93,10 +93,10 @@ export const importRazones = async (razonesToImport: Omit<Razon, 'id' | 'userId'
         });
     }
 
-    razonesToImport.forEach(razon => {
+    for (const razon of razonesToImport) {
         const newDocRef = doc(razonesCol);
         batch.set(newDocRef, { ...razon, descripcion: razon.descripcion.toUpperCase(), userId });
-    });
+    }
 
     await batch.commit();
 };
@@ -171,7 +171,7 @@ export const importFinancialRecords = async (recordsToImport: Omit<FinancialReco
         snapshot.docs.forEach(doc => batch.delete(doc.ref));
     }
 
-    recordsToImport.forEach(r => {
+    for (const r of recordsToImport) {
         const newDocRef = doc(financialRecordsCol);
         let monto = r.monto;
         if ((r.movimiento === 'GASTOS' || r.movimiento === 'INVERSION') && monto > 0) {
@@ -181,7 +181,7 @@ export const importFinancialRecords = async (recordsToImport: Omit<FinancialReco
             monto = Math.abs(monto);
         }
         batch.set(newDocRef, { ...r, monto, userId });
-    });
+    }
 
     await batch.commit();
 };

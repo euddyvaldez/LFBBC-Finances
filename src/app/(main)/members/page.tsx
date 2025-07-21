@@ -13,8 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Integrante } from '@/types';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { isFirebaseConfigured } from '@/lib/firebase';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { isFirebaseConfigured } from '@/lib/firebase';
+import { parseCsvLine } from '@/lib/utils';
+
 
 export default function MembersPage() {
   const { integrantes, addIntegrante, updateIntegrante, deleteIntegrante, financialRecords, loading, importIntegrantes, importIntegrantesLocal } = useAppContext();
@@ -134,7 +136,11 @@ export default function MembersPage() {
       }
       try {
         const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        if (lines.length < 2) {
+          throw new Error('El archivo CSV está vacío o solo contiene la cabecera.');
+        }
+
+        const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
         const nombreIndex = headers.indexOf('nombre');
         const isProtectedIndex = headers.indexOf('isprotected');
 
@@ -142,35 +148,30 @@ export default function MembersPage() {
           throw new Error('La columna "nombre" no fue encontrada en el CSV.');
         }
 
-        const newIntegrantes: Omit<Integrante, 'id' | 'userId'>[] = [];
+        let integrantesToImport: Omit<Integrante, 'id' | 'userId'>[] = [];
         const existingNames = new Set(integrantes.map(i => i.nombre.toLowerCase()));
 
         for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
+          const values = parseCsvLine(lines[i]);
           const nombre = values[nombreIndex]?.replace(/"/g, '').trim();
 
           if (nombre) {
             const isProtected = isProtectedIndex !== -1 ? values[isProtectedIndex]?.trim().toLowerCase() === 'true' : false;
-            
-            const item = { nombre, isProtected };
-            
-            if(importMode === 'add') {
-                if (!existingNames.has(nombre.toLowerCase())) {
-                    newIntegrantes.push(item);
-                }
-            } else { // replace mode
-                newIntegrantes.push(item);
-            }
+            integrantesToImport.push({ nombre, isProtected });
           }
         }
         
-        if (newIntegrantes.length > 0) {
+        if (importMode === 'add') {
+          integrantesToImport = integrantesToImport.filter(i => !existingNames.has(i.nombre.toLowerCase()));
+        }
+
+        if (integrantesToImport.length > 0) {
           if (importDestination === 'cloud') {
-              await importIntegrantes(newIntegrantes, importMode);
+              await importIntegrantes(integrantesToImport, importMode);
           } else {
-              await importIntegrantesLocal(newIntegrantes, importMode);
+              await importIntegrantesLocal(integrantesToImport, importMode);
           }
-          toast({ title: 'Éxito', description: `Importación completa. ${newIntegrantes.length} registros afectados.` });
+          toast({ title: 'Éxito', description: `Importación completa. ${integrantesToImport.length} registros afectados.` });
         } else {
           toast({ title: 'Información', description: 'No se encontraron nuevos integrantes para importar o no hay cambios.' });
         }
@@ -282,7 +283,7 @@ export default function MembersPage() {
                                   </div>
                                   <div>
                                       <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" />
-                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
                                           <Cloud className="mb-3 h-6 w-6" />
                                           Nube
                                       </Label>

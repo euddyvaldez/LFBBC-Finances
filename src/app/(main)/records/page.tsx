@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, parse, isValid, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
+import { cn, parseCsvLine } from '@/lib/utils';
 import { Download, Loader2, Upload, Tag, User, Calendar as CalendarIcon, Pencil, Trash2, ChevronLeft, ChevronRight, Cloud, HardDrive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -301,28 +301,6 @@ const RecordCard = ({ record, getIntegranteName, getRazonDesc }: { record: Finan
     );
 };
 
-const parseCsvLine = (line: string): string[] => {
-    const result: string[] = [];
-    let currentField = '';
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-
-        if (char === '"' && (i === 0 || line[i - 1] !== '\\')) {
-            inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-            result.push(currentField.trim());
-            currentField = '';
-        } else {
-            currentField += char;
-        }
-    }
-    result.push(currentField.trim());
-    return result.map(field => field.startsWith('"') && field.endsWith('"') ? field.slice(1, -1) : field);
-}
-
-
 const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
   const { integrantes, razones, importFinancialRecords, importFinancialRecordsLocal } = useAppContext();
   const { toast } = useToast();
@@ -417,9 +395,13 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
         }
         try {
             const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-            const headers = parseCsvLine(lines[0]).map(h => h.trim());
+            if (lines.length < 2) {
+              throw new Error('El archivo CSV está vacío o solo contiene la cabecera.');
+            }
+
+            const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
             
-            const requiredHeaders = ['fecha', 'integranteNombre', 'movimiento', 'razonDescripcion', 'descripcion', 'monto'];
+            const requiredHeaders = ['fecha', 'integrantenombre', 'movimiento', 'razondescripcion', 'descripcion', 'monto'];
             const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
             if (missingHeaders.length > 0) {
               throw new Error(`Faltan las siguientes columnas en el CSV: ${missingHeaders.join(', ')}`);
@@ -430,17 +412,26 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
 
             const integranteMap = new Map(integrantes.map(i => [i.nombre.toLowerCase(), i.id]));
             const razonMap = new Map(razones.map(r => [r.descripcion.toLowerCase(), r.id]));
+            const headerMap = headers.reduce((acc, h, i) => {
+              acc[h.replace(/\s/g, '')] = i;
+              return acc;
+            }, {} as Record<string, number>);
+
 
             for (let i = 1; i < lines.length; i++) {
                 const values = parseCsvLine(lines[i]);
-                if (values.length !== headers.length) {
+                if (values.length < headers.length) {
                     errors.push(`Línea ${i + 1}: El número de columnas (${values.length}) no coincide con el de las cabeceras (${headers.length}).`);
                     continue;
                 }
-                const row = headers.reduce((obj, header, index) => {
-                    obj[header] = values[index];
-                    return obj;
-                }, {} as {[key: string]: string});
+                const row = {
+                  fecha: values[headerMap['fecha']],
+                  integranteNombre: values[headerMap['integrantenombre']],
+                  movimiento: values[headerMap['movimiento']],
+                  razonDescripcion: values[headerMap['razondescripcion']],
+                  descripcion: values[headerMap['descripcion']],
+                  monto: values[headerMap['monto']]
+                };
 
                 if (row.descripcion && row.descripcion.length > DESCRIPTION_MAX_LENGTH) {
                     errors.push(`Línea ${i + 1}: La descripción excede los ${DESCRIPTION_MAX_LENGTH} caracteres.`);
@@ -564,7 +555,7 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
                                 </div>
                                 <div>
                                     <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" />
-                                    <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                                    <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
                                         <Cloud className="mb-3 h-6 w-6" />
                                         Nube
                                     </Label>

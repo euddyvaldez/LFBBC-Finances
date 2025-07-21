@@ -14,8 +14,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { Razon } from '@/types';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { isFirebaseConfigured } from '@/lib/firebase';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { isFirebaseConfigured } from '@/lib/firebase';
+import { parseCsvLine } from '@/lib/utils';
 
 export default function ReasonsPage() {
   const { razones, addRazon, updateRazon, deleteRazon, financialRecords, loading, importRazones, importRazonesLocal } = useAppContext();
@@ -146,7 +147,11 @@ export default function ReasonsPage() {
       }
       try {
         const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        if (lines.length < 2) {
+            throw new Error('El archivo CSV está vacío o solo contiene la cabecera.');
+        }
+
+        const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
         const descIndex = headers.indexOf('descripcion');
         const quickIndex = headers.indexOf('isquickreason');
         const protectedIndex = headers.indexOf('isprotected');
@@ -156,34 +161,31 @@ export default function ReasonsPage() {
           throw new Error('La columna "descripcion" no fue encontrada en el CSV.');
         }
 
-        const newRazones: Omit<Razon, 'id' | 'userId'>[] = [];
+        let razonesToImport: Omit<Razon, 'id' | 'userId'>[] = [];
         const existingDescriptions = new Set(razones.map(r => r.descripcion.toLowerCase()));
 
         for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
+          const values = parseCsvLine(lines[i]);
           const descripcion = values[descIndex]?.replace(/"/g, '').trim();
           
           if (descripcion) {
             const isQuickReason = quickIndex !== -1 ? (values[quickIndex]?.trim().toLowerCase() === 'true') : false;
             const isProtected = protectedIndex !== -1 ? (values[protectedIndex]?.trim().toLowerCase() === 'true') : false;
-
-            const item = { descripcion, isQuickReason, isProtected };
-
-            if (importMode === 'add' && !existingDescriptions.has(descripcion.toLowerCase())) {
-                newRazones.push(item);
-            } else if (importMode === 'replace') {
-                newRazones.push(item);
-            }
+            razonesToImport.push({ descripcion, isQuickReason, isProtected });
           }
         }
         
-        if (newRazones.length > 0) {
+        if(importMode === 'add') {
+            razonesToImport = razonesToImport.filter(r => !existingDescriptions.has(r.descripcion.toLowerCase()));
+        }
+
+        if (razonesToImport.length > 0) {
           if (importDestination === 'cloud') {
-              await importRazones(newRazones, importMode);
+              await importRazones(razonesToImport, importMode);
           } else {
-              await importRazonesLocal(newRazones, importMode);
+              await importRazonesLocal(razonesToImport, importMode);
           }
-          toast({ title: 'Éxito', description: `${newRazones.length} nuevas razones importadas en modo "${importMode}".` });
+          toast({ title: 'Éxito', description: `${razonesToImport.length} nuevas razones importadas.` });
         } else {
           toast({ title: 'Información', description: 'No se encontraron nuevas razones para importar o no hay cambios.' });
         }
@@ -296,7 +298,7 @@ export default function ReasonsPage() {
                                   </div>
                                   <div>
                                       <RadioGroupItem value="cloud" id="cloud" className="peer sr-only" />
-                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                                      <Label htmlFor="cloud" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
                                           <Cloud className="mb-3 h-6 w-6" />
                                           Nube
                                       </Label>
