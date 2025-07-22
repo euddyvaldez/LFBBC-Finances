@@ -7,7 +7,7 @@ import { isFirebaseConfigured, db } from '@/lib/firebase';
 import { parse, isValid, startOfDay } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './AuthProvider';
-import { onSnapshot, collection, query, where } from 'firebase/firestore';
+import { onSnapshot, collection, query, where, Unsubscribe } from 'firebase/firestore';
 
 interface AppContextType {
   integrantes: Integrante[];
@@ -40,58 +40,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [razones, setRazones] = useState<Razon[]>([]);
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
   
-  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
   
   useEffect(() => {
-    if (authLoading || !isFirebaseConfigured || !db) {
-        if(!isFirebaseConfigured) {
-            setDataLoading(false);
-        }
+    if (!isFirebaseConfigured || !db) {
         return;
     }
 
-    if (!user) {
-        // User is logged out, clear all data and stop loading.
+    let unsubscribers: Unsubscribe[] = [];
+
+    if (user) {
+        // User is logged in, set up listeners.
+        const collections = {
+            integrantes: setIntegrantes,
+            razones: setRazones,
+            financialRecords: setFinancialRecords,
+        };
+
+        unsubscribers = Object.entries(collections).map(([collName, setter]) => {
+            const q = query(collection(db, collName), where("userId", "==", user.uid));
+            
+            return onSnapshot(q, (snapshot) => {
+                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+                setter(data.filter(item => !item.isDeleted));
+            }, (err) => {
+                console.error(`Error escuchando a ${collName}:`, err);
+                setError(err);
+                toast({ variant: 'destructive', title: 'Error de conexión', description: `No se pudo obtener datos de ${collName}.` });
+            });
+        });
+    } else {
+        // User is logged out, clear all data.
         setIntegrantes([]);
         setRazones([]);
         setFinancialRecords([]);
-        setDataLoading(false);
-        return;
     }
-    
-    setDataLoading(true);
 
-    const collections = {
-        integrantes: setIntegrantes,
-        razones: setRazones,
-        financialRecords: setFinancialRecords,
+    // Cleanup listeners on unmount or when user changes.
+    return () => {
+        unsubscribers.forEach(unsub => unsub());
     };
-    
-    const unsubs = Object.entries(collections).map(([collName, setter]) => {
-        const q = query(collection(db, collName), where("userId", "==", user.uid));
-        
-        return onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-            setter(data.filter(item => !item.isDeleted));
-        }, (err) => {
-            console.error(`Error escuchando a ${collName}:`, err);
-            setError(err);
-            toast({ variant: 'destructive', title: 'Error de conexión', description: `No se pudo obtener datos de ${collName}.` });
-        });
-    });
 
-    // We consider data loaded once the initial snapshot is processed.
-    // For simplicity, we'll just mark it as loaded. A more complex system
-    // might wait for all snapshots to fire at least once.
-    setDataLoading(false);
-
-
-    // Cleanup listeners on unmount or user change
-    return () => unsubs.forEach(unsub => unsub());
-
-  }, [user, authLoading, toast]);
+  }, [user, toast]);
 
   const recordDates = useMemo(() => {
     const dates = new Set<number>();
@@ -193,7 +184,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     razones,
     financialRecords,
     recordDates,
-    loading: authLoading || dataLoading,
+    loading: authLoading,
     error,
     addFinancialRecord,
     updateFinancialRecord,
