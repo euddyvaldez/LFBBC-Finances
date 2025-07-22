@@ -1,5 +1,5 @@
 
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, getDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, writeBatch, query, where, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import type { FinancialRecord, Integrante, Razon, Cita, Movimiento } from '@/types';
 
@@ -12,69 +12,92 @@ const CitasData: Cita[] = [
     { texto: "El dinero no es más que una herramienta. Te llevará a donde desees, pero no te reemplazará como conductor.", autor: "Ayn Rand" }
 ];
 
-type PendingOperation = 
-  | { type: 'add', collection: string, payload: any }
-  | { type: 'update', collection: string, payload: { id: string, updates: any } }
-  | { type: 'delete', collection: string, payload: { id: string } };
 
+// --- API Functions for Real-time model ---
 
-// --- API Functions ---
-
-export const getChangesSince = async (timestamp: number | null, userId: string) => {
-    const collections = ['integrantes', 'razones', 'financialRecords'];
-    const results: { [key: string]: any[] } = {
-        integrantes: [],
-        razones: [],
-        financialRecords: [],
-    };
-
-    for (const coll of collections) {
-        let q = query(collection(db, coll), where("userId", "==", userId));
-        if (timestamp) {
-            q = query(q, where("updatedAt", ">", timestamp));
-        }
-        const snapshot = await getDocs(q);
-        results[coll] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    }
-
-    return results as {
-        integrantes: Integrante[],
-        razones: Razon[],
-        financialRecords: FinancialRecord[],
-    };
+const addEntity = async (collectionName: string, data: any, userId: string) => {
+    if (!db) throw new Error("Firestore no está inicializado.");
+    const now = Timestamp.now();
+    await addDoc(collection(db, collectionName), {
+        ...data,
+        userId,
+        createdAt: now,
+        updatedAt: now,
+        isDeleted: false,
+    });
 };
 
-export const batchProcess = async (operations: PendingOperation[]) => {
+const updateEntity = async (collectionName: string, id: string, data: any) => {
+    if (!db) throw new Error("Firestore no está inicializado.");
+    const docRef = doc(db, collectionName, id);
+    await updateDoc(docRef, {
+        ...data,
+        updatedAt: Timestamp.now(),
+    });
+};
+
+const deleteEntity = async (collectionName: string, id: string) => {
+    if (!db) throw new Error("Firestore no está inicializado.");
+    // Soft delete
+    await updateEntity(collectionName, id, { isDeleted: true });
+};
+
+// Financial Records
+export const addFinancialRecord = (data: Omit<FinancialRecord, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, userId: string) => addEntity('financialRecords', data, userId);
+export const updateFinancialRecord = (id: string, data: Partial<FinancialRecord>) => updateEntity('financialRecords', id, data);
+export const deleteFinancialRecord = (id: string) => deleteEntity('financialRecords', id);
+
+// Integrantes
+export const addIntegrante = (data: Omit<Integrante, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, userId: string) => addEntity('integrantes', { ...data, nombre: data.nombre.toUpperCase() }, userId);
+export const updateIntegrante = (id:string, data: Partial<Integrante>) => updateEntity('integrantes', id, { ...data, nombre: data.nombre?.toUpperCase() });
+export const deleteIntegrante = (id: string) => deleteEntity('integrantes', id);
+
+// Razones
+export const addRazon = (data: Omit<Razon, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, userId: string) => addEntity('razones', { ...data, descripcion: data.descripcion.toUpperCase() }, userId);
+export const updateRazon = (id: string, data: Partial<Razon>) => updateEntity('razones', id, { ...data, descripcion: data.descripcion?.toUpperCase() });
+export const deleteRazon = (id: string) => deleteEntity('razones', id);
+
+
+// Import logic
+export const importData = async <T extends { isProtected?: boolean }>(
+    collectionName: string,
+    itemsToImport: any[],
+    existingItems: T[],
+    getUniqueKey: (item: any) => string,
+    mode: 'add' | 'replace',
+    userId: string
+) => {
+    if (!db) throw new Error("Firestore no está inicializado.");
     const batch = writeBatch(db);
 
-    for (const op of operations) {
-        const docRef = op.type === 'add'
-            ? doc(collection(db, op.collection))
-            : doc(db, op.collection, op.payload.id);
-
-        switch (op.type) {
-            case 'add':
-                batch.set(docRef, op.payload);
-                break;
-            case 'update':
-                batch.update(docRef, op.payload.updates);
-                break;
-            case 'delete':
-                // Soft delete by marking as deleted
-                batch.update(docRef, { isDeleted: true, updatedAt: new Date().getTime() });
-                break;
-        }
+    if (mode === 'replace') {
+        existingItems.forEach(item => {
+            if (!item.isProtected) {
+                const docRef = doc(db, collectionName, (item as any).id);
+                batch.update(docRef, { isDeleted: true, updatedAt: Timestamp.now() });
+            }
+        });
     }
+
+    const itemsToAdd = (mode === 'add')
+        ? itemsToImport.filter(item => 
+            !existingItems.some(existing => getUniqueKey(existing).toLowerCase() === getUniqueKey(item).toLowerCase())
+          )
+        : itemsToImport;
+        
+    itemsToAdd.forEach(item => {
+        const docRef = doc(collection(db, collectionName));
+        const now = Timestamp.now();
+        batch.set(docRef, { 
+            ...item, 
+            userId,
+            createdAt: now,
+            updatedAt: now,
+            isDeleted: false
+        });
+    });
+
     await batch.commit();
-};
-
-
-// Generic data fetcher - Used for initial load if needed
-export const getData = async (collectionName: string, userId: string) => {
-    if (!userId) throw new Error("User ID is required");
-    const q = query(collection(db, collectionName), where("userId", "==", userId), where("isDeleted", "==", false));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
 

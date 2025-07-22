@@ -4,7 +4,7 @@ import { useAppContext } from '@/contexts/AppProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Download, Loader2, Pencil, Save, Trash2, Upload, X, Zap, Cloud, HardDrive } from 'lucide-react';
+import { Download, Loader2, Pencil, Save, Trash2, Upload, X, Zap } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -14,13 +14,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { Razon } from '@/types';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { isFirebaseConfigured } from '@/lib/firebase';
 import { parseCsvLine } from '@/lib/utils';
 
 
 export default function ReasonsPage() {
-  const { razones, addRazon, updateRazon, deleteRazon, financialRecords, loading, importRazonesLocal } = useAppContext();
+  const { razones, addRazon, updateRazon, deleteRazon, financialRecords, loading, importRazones } = useAppContext();
   const { toast } = useToast();
 
   const [newRazonDesc, setNewRazonDesc] = useState('');
@@ -175,8 +173,8 @@ export default function ReasonsPage() {
         }
         
         if (razonesToImport.length > 0) {
-            await importRazonesLocal(razonesToImport, importMode);
-            toast({ title: 'Éxito', description: `Importación local completa. Los cambios se sincronizarán con la nube.` });
+            await importRazones(razonesToImport, importMode);
+            toast({ title: 'Éxito', description: `Importación completa.` });
         } else {
           toast({ title: 'Información', description: 'No se encontraron nuevas razones para importar o no hay cambios.' });
         }
@@ -268,7 +266,7 @@ export default function ReasonsPage() {
                       <DialogHeader>
                           <DialogTitle>Importar Razones desde CSV</DialogTitle>
                            <DialogDescription>
-                              Los datos se importarán al almacenamiento local y se sincronizarán con la nube la próxima vez que presiones "Sincronizar".
+                              El archivo CSV debe contener las columnas: "descripcion", "isQuickReason" (opcional), "isProtected" (opcional).
                           </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">

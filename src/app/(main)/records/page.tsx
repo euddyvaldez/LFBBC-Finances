@@ -10,7 +10,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { format, parse, isValid, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn, parseCsvLine } from '@/lib/utils';
-import { Download, Loader2, Upload, Tag, User, Calendar as CalendarIcon, Pencil, Trash2, ChevronLeft, ChevronRight, Cloud, HardDrive } from 'lucide-react';
+import { Download, Loader2, Upload, Tag, User, Calendar as CalendarIcon, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -22,10 +22,7 @@ import type { FinancialRecord, Movimiento } from '@/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Autocomplete } from '@/components/Autocomplete';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { useAuth } from '@/contexts/AuthProvider';
 import { Label } from '@/components/ui/label';
-import { isFirebaseConfigured } from '@/lib/firebase';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 
 const DESCRIPTION_MAX_LENGTH = 500;
@@ -303,7 +300,7 @@ const RecordCard = ({ record, getIntegranteName, getRazonDesc }: { record: Finan
 };
 
 const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
-  const { integrantes, razones, importFinancialRecordsLocal } = useAppContext();
+  const { integrantes, razones, importFinancialRecords } = useAppContext();
   const { toast } = useToast();
   const [filter, setFilter] = useState('');
   const [filterField, setFilterField] = useState('descripcion');
@@ -320,7 +317,12 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
   const getRazonDesc = (id: string) => razones.find((r) => r.id === id)?.descripcion || 'N/A';
   
   const filteredRecords = useMemo(() => {
-    const sortedRecords = [...records].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const sortedRecords = [...records].sort((a, b) => {
+        const dateA = a.fecha ? parseDate(a.fecha).getTime() : 0;
+        const dateB = b.fecha ? parseDate(b.fecha).getTime() : 0;
+        if (dateB !== dateA) return dateB - dateA;
+        return (b.createdAt || 0) - (a.createdAt || 0);
+    });
 
     if (!filter) return sortedRecords;
     return sortedRecords.filter((record) => {
@@ -454,8 +456,8 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
             }
 
             if (recordsToImport.length > 0) {
-                await importFinancialRecordsLocal(recordsToImport, importMode);
-                toast({ title: 'Éxito', description: `Importación local completa. Los cambios se sincronizarán con la nube.` });
+                await importFinancialRecords(recordsToImport, importMode);
+                toast({ title: 'Éxito', description: `Importación completa.` });
             } else {
                 toast({ title: 'Información', description: 'No se encontraron nuevos registros para importar.' });
             }
@@ -524,7 +526,7 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
                     <DialogHeader>
                         <DialogTitle>Importar Registros desde CSV</DialogTitle>
                          <DialogDescription>
-                              Los datos se importarán al almacenamiento local y se sincronizarán con la nube la próxima vez que presiones "Sincronizar".
+                              El archivo CSV debe contener las columnas: fecha, integranteNombre, movimiento, razonDescripcion, descripcion, monto.
                           </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
@@ -626,7 +628,7 @@ const RecordsTable = ({ records }: { records: FinancialRecord[] }) => {
 
 export default function RecordsPage() {
     const { financialRecords, loading } = useAppContext();
-    const { loading: authLoading } = useAuth();
+    const { loading: authLoading } = useAppContext();
 
     if (loading || authLoading) {
         return (

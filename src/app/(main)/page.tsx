@@ -14,28 +14,16 @@ import { format, startOfMonth, endOfMonth, isWithinInterval, parse, isValid, get
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { isFirebaseConfigured } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthProvider';
 
 const parseDate = (dateStr: string) => parse(dateStr, 'dd/MM/yyyy', new Date());
 
 export default function DashboardPage() {
-  const { financialRecords, loading, razones, integrantes, syncWithCloud } = useAppContext();
+  const { financialRecords, loading, razones, integrantes } = useAppContext();
+  const { user } = useAuth();
   const [balanceVisible, setBalanceVisible] = useState(true);
   const [citas, setCitas] = useState<Cita[]>([]);
   const [currentCitaIndex, setCurrentCitaIndex] = useState(0);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const { toast } = useToast();
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-        await syncWithCloud();
-    } catch (error) {
-        // Toast is handled within syncWithCloud
-    } finally {
-        setIsSyncing(false);
-    }
-  };
-
 
   useEffect(() => {
     const fetchCitas = async () => {
@@ -90,7 +78,12 @@ export default function DashboardPage() {
         .reduce((acc, r) => acc + (r.monto || 0), 0);
 
     const recentRecords = [...validRecords]
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .sort((a, b) => {
+          const dateA = a.fecha ? parseDate(a.fecha).getTime() : 0;
+          const dateB = b.fecha ? parseDate(b.fecha).getTime() : 0;
+          if (dateB !== dateA) return dateB - dateA;
+          return (b.createdAt || 0) - (a.createdAt || 0);
+      })
       .slice(0, 5);
 
     const uniqueIntegrantesInMonth = new Set(monthlyRecords.map(r => r.integranteId));
@@ -176,7 +169,7 @@ export default function DashboardPage() {
   const getIntegranteName = (id: string) => integrantes.find((i) => i.id === id)?.nombre || 'N/A';
   const getRazonDesc = (id: string) => razones.find((r) => r.id === id)?.descripcion || 'N/A';
 
-  if (loading && !isSyncing) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-[calc(100vh-10rem)]">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -188,14 +181,17 @@ export default function DashboardPage() {
     <div className="space-y-6 md:space-y-8">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Inicio</h1>
-        <Button onClick={handleSync} disabled={isSyncing || !isFirebaseConfigured} className="w-full sm:w-auto">
-            {isSyncing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-                <Cloud className="mr-2 h-4 w-4" />
-            )}
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar con la Nube'}
-        </Button>
+         {!isFirebaseConfigured && (
+          <Card className="bg-destructive/10 border-destructive">
+            <CardContent className="p-4 flex items-center gap-4">
+               <AlertCircle className="text-destructive h-6 w-6"/>
+               <div>
+                  <h3 className="font-bold text-destructive">Modo Local Activado</h3>
+                  <p className="text-sm text-destructive/80">Firebase no está configurado. Todos los datos se perderán al cerrar la pestaña.</p>
+               </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">

@@ -5,7 +5,7 @@ import { useAppContext } from '@/contexts/AppProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Download, Loader2, Pencil, Save, Trash2, Upload, X, Cloud, HardDrive } from 'lucide-react';
+import { Download, Loader2, Pencil, Save, Trash2, Upload, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -13,13 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Integrante } from '@/types';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { isFirebaseConfigured } from '@/lib/firebase';
 import { parseCsvLine } from '@/lib/utils';
 
 
 export default function MembersPage() {
-  const { integrantes, addIntegrante, updateIntegrante, deleteIntegrante, financialRecords, loading, importIntegrantesLocal } = useAppContext();
+  const { integrantes, addIntegrante, updateIntegrante, deleteIntegrante, financialRecords, loading, importIntegrantes } = useAppContext();
   const { toast } = useToast();
 
   const [newIntegranteName, setNewIntegranteName] = useState('');
@@ -30,7 +28,6 @@ export default function MembersPage() {
   
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importDestination, setImportDestination] = useState<'local' | 'cloud'>(isFirebaseConfigured ? 'cloud' : 'local');
   const [importMode, setImportMode] = useState<'add' | 'replace'>('add');
   const importFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -161,13 +158,8 @@ export default function MembersPage() {
         }
         
         if (integrantesToImport.length > 0) {
-          if (importDestination === 'cloud') {
-              // Cloud import is handled via sync, for now this is local only
-              toast({ title: 'Información', description: `La importación a la nube se realizará en la próxima sincronización.` });
-          }
-          await importIntegrantesLocal(integrantesToImport, importMode);
-          toast({ title: 'Éxito', description: `Importación local completa.` });
-          
+          await importIntegrantes(integrantesToImport, importMode);
+          toast({ title: 'Éxito', description: `Importación completa.` });
         } else {
           toast({ title: 'Información', description: 'No se encontraron nuevos integrantes para importar o no hay cambios.' });
         }
@@ -257,7 +249,7 @@ export default function MembersPage() {
                       <DialogHeader>
                           <DialogTitle>Importar Integrantes desde CSV</DialogTitle>
                           <DialogDescription>
-                              Los datos se importarán al almacenamiento local y se sincronizarán con la nube la próxima vez que presiones "Sincronizar".
+                              El archivo CSV debe contener las columnas: "nombre" y "isProtected" (opcional).
                           </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">

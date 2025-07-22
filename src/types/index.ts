@@ -1,11 +1,13 @@
 
+import { Timestamp } from 'firebase/firestore';
+
 export type Movimiento = 'INGRESOS' | 'GASTOS' | 'INVERSION';
 
 interface BaseEntity {
   id: string;
   userId: string;
-  createdAt: number; // Unix timestamp
-  updatedAt: number; // Unix timestamp
+  createdAt: Timestamp | number; // Support both server and client timestamps
+  updatedAt: Timestamp | number; // Support both server and client timestamps
   isDeleted?: boolean;
 }
 

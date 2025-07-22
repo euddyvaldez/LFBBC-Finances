@@ -2,8 +2,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { User } from 'firebase/auth';
+import { getAuth, onAuthStateChanged, type User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { auth as firebaseAuth, isFirebaseConfigured } from '@/lib/firebase';
 
 interface AuthContextType {
   user: User | null;
@@ -14,11 +15,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// A dummy user object to satisfy components that might expect a user.
+// A dummy user object for offline mode.
 const dummyUser: User = {
-  uid: 'default-user',
-  email: 'default@example.com',
-  displayName: 'Default User',
+  uid: 'local-user',
+  email: 'local@example.com',
+  displayName: 'Local User',
   photoURL: null,
   phoneNumber: null,
   providerId: 'password',
@@ -45,20 +46,44 @@ const dummyUser: User = {
 
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !firebaseAuth) {
+      // Run in offline mode with a dummy user
+      setUser(dummyUser);
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      setUser(user);
+      setLoading(false);
+    }, (error) => {
+      console.error("Auth error:", error);
+      setError(error.message);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
 
   const logout = async () => {
-    // In a real scenario, this would redirect to a login page.
-    // Since we have no login, it does nothing.
-    console.log("Logout function called, but no action is taken as auth is disabled.");
+    if(firebaseAuth) {
+      await firebaseAuth.signOut();
+      setUser(null);
+    } else {
+       console.log("Logout function called, but no action is taken as auth is disabled.");
+    }
   };
 
   const value = {
-    user: dummyUser,
-    loading: false, // Never loading, access is immediate
-    error: null,
-    // Provide dummy functions to prevent crashes if they are called somewhere.
-    login: async () => {},
-    signup: async () => {},
+    user,
+    loading,
+    error,
     logout,
   };
 
