@@ -35,22 +35,33 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const parseDate = (dateStr: string) => parse(dateStr, 'dd/MM/yyyy', new Date());
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [integrantes, setIntegrantes] = useState<Integrante[]>([]);
   const [razones, setRazones] = useState<Razon[]>([]);
   const [financialRecords, setFinancialRecords] = useState<FinancialRecord[]>([]);
   
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { toast } = useToast();
   
   useEffect(() => {
-    if (!user || !db) {
-        setLoading(false);
+    if (authLoading || !isFirebaseConfigured || !db) {
+        if(!isFirebaseConfigured) {
+            setDataLoading(false);
+        }
+        return;
+    }
+
+    if (!user) {
+        // User is logged out, clear all data and stop loading.
+        setIntegrantes([]);
+        setRazones([]);
+        setFinancialRecords([]);
+        setDataLoading(false);
         return;
     }
     
-    setLoading(true);
+    setDataLoading(true);
 
     const collections = {
         integrantes: setIntegrantes,
@@ -71,12 +82,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
     });
 
-    setLoading(false);
+    // We consider data loaded once the initial snapshot is processed.
+    // For simplicity, we'll just mark it as loaded. A more complex system
+    // might wait for all snapshots to fire at least once.
+    setDataLoading(false);
 
-    // Cleanup listeners on unmount
+
+    // Cleanup listeners on unmount or user change
     return () => unsubs.forEach(unsub => unsub());
 
-  }, [user, toast]);
+  }, [user, authLoading, toast]);
 
   const recordDates = useMemo(() => {
     const dates = new Set<number>();
@@ -178,7 +193,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     razones,
     financialRecords,
     recordDates,
-    loading,
+    loading: authLoading || dataLoading,
     error,
     addFinancialRecord,
     updateFinancialRecord,
