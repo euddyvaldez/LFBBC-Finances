@@ -181,17 +181,6 @@ export default function DashboardPage() {
     <div className="space-y-6 md:space-y-8">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Inicio</h1>
-         {!isFirebaseConfigured && (
-          <Card className="bg-destructive/10 border-destructive">
-            <CardContent className="p-4 flex items-center gap-4">
-               <AlertCircle className="text-destructive h-6 w-6"/>
-               <div>
-                  <h3 className="font-bold text-destructive">Modo Local Activado</h3>
-                  <p className="text-sm text-destructive/80">Firebase no está configurado. Todos los datos se perderán al cerrar la pestaña.</p>
-               </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
 
       <div className="grid gap-4 md:gap-6 md:grid-cols-2 lg:grid-cols-3">
